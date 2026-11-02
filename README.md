@@ -25,13 +25,14 @@ dotnet tool restore
 dotnet user-secrets set "ConnectionStrings:SurveyDatabase" '<your SQL Server or Azure SQL connection string>' --project src/StakeholderConsultations.Web
 dotnet user-secrets set "Survey:ExportKey" '<a long random export secret>' --project src/StakeholderConsultations.Web
 
-dotnet ef database update --project src/StakeholderConsultations.Web --startup-project src/StakeholderConsultations.Web -- --environment Development
 dotnet run --project src/StakeholderConsultations.Web
 ```
 
 Open <http://localhost:5080>. The frontend submits directly to `/api/responses`; no separate frontend server or CORS configuration is needed. User secrets are loaded in Development. Environment-variable equivalents are `ConnectionStrings__SurveyDatabase` and `Survey__ExportKey`. Do not commit credentials or pass them as URL parameters.
 
-The homepage can run without database configuration. Submissions and authorized exports return `503` until a working database connection and the initial migration are in place. Production startup never applies migrations automatically.
+When `ConnectionStrings:SurveyDatabase` is configured, the application applies pending EF Core migrations at startup before accepting requests. On the first run, this creates the `Responses` table, its index, and the EF migration history. Later starts apply only pending migrations and preserve existing responses. The database account must have permission to create and update the schema. If the configured database is unavailable or a migration fails, startup fails so the container can report the problem and be restarted after it is resolved.
+
+Without a connection string, startup skips migrations and the homepage remains available; submissions and authorized exports return `503` until SQL is configured.
 
 ## Backend contract
 
@@ -84,16 +85,16 @@ dotnet test
 dotnet publish src/StakeholderConsultations.Web -c Release -o artifacts/publish
 ```
 
-API/CSV/hosting tests run without a database using a test response store. The real SQL integration test is skipped unless `SURVEY_TEST_SQL_CONNECTION` is set to a **dedicated test database**. When set, it applies migrations, posts a uniquely marked response through the real SQL store, checks persistence/export, and deletes only that test response. Database provisioning is not included.
+API/CSV/hosting tests run without a database using a test response store. The real SQL integration test is skipped unless `SURVEY_TEST_SQL_CONNECTION` is set to a **dedicated test database**. When set, it verifies automatic startup migration, posts a uniquely marked response through the real SQL store, checks persistence/export, restarts the app to verify existing data is preserved, and deletes only that test response. Database provisioning is not included.
 
-Generate a reviewable, idempotent production migration script:
+Startup handles schema migration automatically. To review the SQL or apply migrations manually before startup, optionally generate an idempotent migration script:
 
 ```sh
 mkdir -p artifacts
 dotnet ef migrations script --idempotent --project src/StakeholderConsultations.Web --startup-project src/StakeholderConsultations.Web --output artifacts/migrations.sql
 ```
 
-Apply that script to the target database with an account permitted to migrate the schema **before** deploying the app. The runtime account needs read/insert access to the Responses table. Never point integration tests at production.
+If applying the script manually, startup will recognize the recorded migrations and skip them. The runtime account needs schema migration permissions in addition to read/insert access to the Responses table. Never point integration tests at production.
 
 ## Docker
 
@@ -108,7 +109,7 @@ docker run --rm --name stakeholder-consultations -p 8080:8080 \
 
 Open <http://localhost:8080>. The image serves both the frontend and API, runs as the .NET image's non-root user, and listens on container port `8080`. The SDK is used only in the build stage; the final image contains the ASP.NET Core runtime and published application.
 
-Set `ConnectionStrings__SurveyDatabase` and `Survey__ExportKey` in your shell or deployment platform before running the container. The `-e NAME` options forward those environment variables without embedding their values in the image. The database must be reachable from inside the container; `localhost` refers to the container itself. Apply the database migration separately using the instructions above. Without SQL configuration, the frontend still loads and submissions return `503`.
+Set `ConnectionStrings__SurveyDatabase` and `Survey__ExportKey` in your shell or deployment platform before running the container. The `-e NAME` options forward those environment variables without embedding their values in the image. The database must be reachable from inside the container; `localhost` refers to the container itself. The container automatically creates or updates the schema at startup using the configured database account, which must have schema migration permissions. Without SQL configuration, the frontend still loads and submissions return `503`.
 
 The Docker build context includes only the web project, excluding local build output, local settings, credential files, documents, and raw O*NET downloads. Both browser JSON datasets are included in the image.
 
@@ -137,14 +138,14 @@ docker run --rm -p 8080:8080 \
   ghcr.io/datapartnership/ai-index-stakeholder-consultations:latest
 ```
 
-Authenticate with `docker login ghcr.io` first when pulling a private package. Image publication does not deploy the app or run database migrations.
+Authenticate with `docker login ghcr.io` first when pulling a private package. Image publication does not deploy the app or contact the database; schema migration runs when the deployed container starts.
 
 ## Azure App Service
 
 1. Use a .NET 10 Azure App Service on Windows or Linux and an existing Azure SQL database reachable from that app.
 2. Configure `ConnectionStrings__SurveyDatabase` and `Survey__ExportKey` as App Service environment settings. Set `ASPNETCORE_ENVIRONMENT=Production`, enable HTTPS Only, and set `AllowedHosts` to the app hostname (semicolon-separated if using multiple domains).
 3. For Linux App Service HTTPS proxy termination, set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` in the managed App Service environment so the application sees the external HTTPS scheme for same-origin checks. Windows/IIS uses ASP.NET Core's IIS integration. If hosting behind a different proxy, explicitly configure trusted forwarding for that environment.
-4. Apply the production migration script above, then deploy the **contents** of `artifacts/publish/` as one app, including the DLLs, configuration, and `wwwroot/`. Linux startup is `dotnet StakeholderConsultations.Web.dll`; it must not use the previous Node/PM2 static-server command.
+4. Deploy the **contents** of `artifacts/publish/` as one app, including the DLLs, configuration, and `wwwroot/`. The app applies pending database migrations on startup, so its configured database account needs schema migration permissions. Linux startup is `dotnet StakeholderConsultations.Web.dll`; it must not use the previous Node/PM2 static-server command.
 5. For Windows/IIS, use the `web.config` generated by `dotnet publish`. The old static-only repository `web.config` has been removed.
 6. Check `/`, `/style.css`, `/survey.js`, `/data/onet_activities.json`, and `/data/soc_tasks.json`. Submit a test response, confirm it appears in the protected export, and verify `/appsettings.json`, `/worker.js`, and unknown routes return `404`.
 

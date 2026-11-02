@@ -18,7 +18,9 @@ public sealed class SqlPersistenceTests
         using var client = factory.CreateSurveyClient();
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SurveyDbContext>();
-        await db.Database.MigrateAsync();
+        // Creating the client starts the application, which must apply migrations itself.
+        Assert.NotEmpty(await db.Database.GetAppliedMigrationsAsync());
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.False(db.Database.HasPendingModelChanges());
 
         var marker = "integration_" + Guid.NewGuid().ToString("N");
@@ -37,6 +39,17 @@ public sealed class SqlPersistenceTests
             Assert.Contains(marker, csv);
             Assert.Contains(saved.Id.ToString(), csv);
             Assert.Contains("café", csv);
+
+            // A second startup must leave the existing schema and saved answers intact.
+            await using var restarted = new SurveyApplicationFactory(useFakeStore: false,
+                connectionString: Environment.GetEnvironmentVariable("SURVEY_TEST_SQL_CONNECTION"));
+            using var restartedClient = restarted.CreateSurveyClient();
+            restartedClient.DefaultRequestHeaders.Add("X-Export-Key", "test-export-secret");
+            using var restartedExport = await restartedClient.GetAsync("/api/export");
+            Assert.Equal(HttpStatusCode.OK, restartedExport.StatusCode);
+            var restartedCsv = await restartedExport.Content.ReadAsStringAsync();
+            Assert.Contains(marker, restartedCsv);
+            Assert.Contains(saved.Id.ToString(), restartedCsv);
         }
         finally
         {

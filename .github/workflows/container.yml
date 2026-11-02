@@ -2,10 +2,10 @@ name: Build and publish container
 
 on:
   push:
-    branches: [main, deployment]
+    branches: [deployment]
     tags: ["v*"]
   pull_request:
-    branches: [main, deployment]
+    branches: [deployment]
   workflow_dispatch:
 
 permissions:

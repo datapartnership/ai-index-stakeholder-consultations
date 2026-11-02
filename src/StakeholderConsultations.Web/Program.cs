@@ -11,6 +11,19 @@ builder.Services.AddScoped<ISurveyResponseStore, SqlSurveyResponseStore>();
 
 var app = builder.Build();
 
+if (!string.IsNullOrWhiteSpace(app.Configuration.GetConnectionString("SurveyDatabase")))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<SurveyDbContext>();
+    app.Logger.LogInformation("Applying pending survey database migrations.");
+    await db.Database.MigrateAsync();
+    app.Logger.LogInformation("Survey database schema is up to date.");
+}
+else
+{
+    app.Logger.LogWarning("SurveyDatabase is not configured; skipping database migrations.");
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();

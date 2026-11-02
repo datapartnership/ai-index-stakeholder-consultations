@@ -87,7 +87,10 @@
         if (!w || !l.width || !w.width) return;
         const x0 = w.left + w.width / 2 - base.left, y0 = w.bottom - base.top + 4;
         let d;
-        if (label.dataset.attach === "left") {
+        if (l.bottom <= w.top) {
+          // Label above its phrase: a straight arrow up from the phrase.
+          d = `M${x0},${w.top - base.top - 4} L${x0},${l.bottom - base.top + 6}`;
+        } else if (label.dataset.attach === "left") {
           // Down the left margin, then in from the side, clear of the cards above it.
           const col = label.parentElement.getBoundingClientRect();
           const x1 = l.left - base.left - 8, y1 = l.top + l.height / 2 - base.top;

@@ -64,11 +64,11 @@ window.SURVEY_CONFIG = {
       indicators: [
         {
           id: "user_characteristics",
-          label: "User characteristics",
-          title: "User characteristics",
+          label: "User Characteristics",
+          title: "User Characteristics",
           show: {
-            definition: "Characteristics of people who use Consumer Chat Generative AI in countries.",
-            taxonomy: "A starter list of characteristics for the shared survey:",
+            definition: "Characteristics of people who use Consumer Chat Generative AI in countries. These may or may not be the characteristics of the users whose chats are analyzed in the subsequent indicators.",
+            taxonomy: "A starter list of characteristics that we may want to measure:",
             pillGroups: [
               { sets: [{ pills: ["Age", "Level of education", "Urban or rural", "Gender", "User occupation", "Income", "Seniority and experience"] }] }
             ],
@@ -82,8 +82,8 @@ window.SURVEY_CONFIG = {
         },
         {
           id: "use_case",
-          label: "Use case",
-          title: "Use case",
+          label: "Use Case",
+          title: "Use Case",
           show: {
             definition: "Whether a chat was used in the context of work, education or personal use.",
             definitionList: [
@@ -112,23 +112,36 @@ window.SURVEY_CONFIG = {
           title: "Work Activity",
           show: {
             definition: "The main work activity that the conversation is used for.",
-            taxonomy: "The O*NET taxonomy maintained by the U.S. Department of Labor. There are four options for taxonomy:",
+            taxonomy: "The O*NET Work Activity taxonomies:",
             taxonomyBullets: [
-              { term: "Option 1: General Work Activities.", text: "Highest level, with 41 items." },
-              { term: "Option 2: Intermediate Work Activities.", text: "332 items, which map to the GWAs." },
-              { term: "Option 3: Detailed Work Activities (DWAs)." },
-              { term: "Option 4: Tasks.", text: "19,000+ items created from US occupations and a survey of US workers." }
+              { term: "Option 1:", text: "Classify all chats to O*NET Work Activities by 1 of 4 O*NET levels. Within Option 1, we can classify chats by:",
+                sub: [
+                  { term: "General Work Activities (GWAs).", text: "Highest level, with 41 items." },
+                  { term: "Intermediate Work Activities (IWAs).", text: "332 items, which map to the GWAs." },
+                  { term: "Detailed Work Activities (DWAs)." },
+                  { term: "Tasks.", text: "19,000+ items created from US occupations and a survey of US workers." }
+                ] },
+              { term: "Option 2:", text: "Classify Work-related chats to O*NET Work Activities, Personal Use chats to Time Use Surveys, and Education chats also to Work Activities." }
             ],
             // The donuts, rankings and search come from data files built with tools/build_onet_data.py.
             example: { explorer: { data: "data/onet_activities.json", tasks: "data/soc_tasks.json" } }
           },
           skipCommon: ["how"],
           questions: [
-            { id: "activity_vs_task", type: "single", label: "Which of the 4 levels is best suited to study impact of AI on work activities?",
-              options: ["Option 1: General Work Activities", "Option 2: Intermediate Work Activities", "Option 3: Detailed Work Activities", "Option 4: Tasks", "Not sure"] },
-            { id: "activity_vs_task_why", type: "textarea", label: "Why?", hint: "Optional.", showIf: { question: "activity_vs_task", answered: true } },
-            { id: "onet_lmic", type: "textarea", label: "Can you study AI exposure in LMICs using activities from O*NET?" },
-            { id: "how", type: "textarea", label: "How is it relevant, and how would you use it?", hint: "Please provide a brief explanation or example." }
+            { id: "taxonomy_option", type: "single", label: "Which taxonomy option do you think is more suited?",
+              options: ["Option 1", "Option 2", "Not sure"] },
+            { id: "activity_vs_task", type: "single", label: "Which of the 4 levels would be most useful to study the activities AI is used for?",
+              options: ["General Work Activities (GWAs)", "Intermediate Work Activities (IWAs)", "Detailed Work Activities (DWAs)", "Tasks", "Not sure"],
+              showIf: { question: "taxonomy_option", equals: "Option 1" } },
+            { id: "time_use_survey", type: "textarea", label: "Which Time Use Survey is best suited to measure global chat data?",
+              showIf: { question: "taxonomy_option", equals: "Option 2" } },
+            { id: "education_onet", type: "scale", label: "Can education-related chats be measured using O*NET work activities?", options: ["Yes", "No", "Not sure"],
+              showIf: { question: "taxonomy_option", equals: "Option 2" } },
+            { id: "work_level", type: "single", label: "Which O*NET level is best suited to classify work-related chats?",
+              options: ["General Work Activities (GWAs)", "Intermediate Work Activities (IWAs)", "Detailed Work Activities (DWAs)", "Tasks", "Not sure"],
+              showIf: { question: "taxonomy_option", equals: "Option 2" } },
+            { id: "how", type: "textarea", label: "How is it relevant, and how would you use it?", hint: "Please provide a brief explanation or example." },
+            { id: "onet_lmic", type: "textarea", label: "Can you study AI exposure in LMICs using activities from O*NET?" }
           ]
         },
         {
@@ -212,7 +225,7 @@ window.SURVEY_CONFIG = {
           label: "Industry",
           title: "Industry",
           show: {
-            definition: "This indicator measures the industry or sector that the chat relates to. It does not measure the occupational content. For example, a chat requesting ‘written documents pertaining to teaching’ can be from the ‘legal’ sector, the ‘health’ sector or ‘education’.",
+            definition: "This indicator measures the industry or sector that the chat relates to. It does not measure the occupational content. For example, for a chat, the work activity could be ‘Edit written materials or documents’, the occupational content could be ‘Teaching’ and the industry could be ‘Health’.",
             taxonomy: "The 21 sections of the International Standard Industrial Classification of All Economic Activities (ISIC Rev. 4).",
             taxonomyTable: {
               columns: ["Section", "Description", "Divisions"],
@@ -257,6 +270,48 @@ window.SURVEY_CONFIG = {
           questions: []
         },
         {
+          id: "automation",
+          label: "Automation vs Augmentation",
+          title: "Automation / Augmentation",
+          show: {
+            definition: "Whether AI completes a task on its own (automation) or supports a person who remains in charge of it (augmentation). For labor-market specialists this is replacement versus augmentation of tasks; in education, learning versus offloading; in digital development, which tasks are handed over to AI.",
+            taxonomy: "Automation consists of directive and feedback-loop chats. Augmentation consists of task iteration, learning and validation.",
+            example: {
+              chart: {
+                type: "split",
+                title: "Share of messages that automate or augment work, Country A",
+                parts: [ { name: "Augmentation", value: 54 }, { name: "Automation", value: 46 } ]
+              }
+            }
+          },
+          questions: [
+            { id: "taxonomy_feedback", type: "textarea", label: "Is this taxonomy useful? Do you have an alternative way to measure automation vs augmentation?" }
+          ]
+        },
+        {
+          id: "time_gains",
+          label: "Time Gains",
+          title: "Time Gains",
+          show: {
+            definition: "The time saved by using generative AI for an activity: the time a competent person (not a beginner or an expert) would need without AI, minus the time spent with AI.",
+            taxonomy: "Broad, roughly logarithmic bands, which reduce classification errors:",
+            taxonomyList: [
+              { term: "Less than 5 minutes", text: "A few minutes of work." },
+              { term: "5 minutes to 1 hour", text: "Between a few minutes and an hour’s work." },
+              { term: "1 to 8 hours", text: "Between an hour and a day’s work." },
+              { term: "More than 8 hours", text: "More than a day’s work; can be split further." }
+            ],
+            example: {
+              chart: {
+                title: "Share of messages by time saved, Country A",
+                unit: "%",
+                bars: [ { label: "Less than 5 minutes", value: 41 }, { label: "5 minutes to 1 hour", value: 38 }, { label: "1 to 8 hours", value: 17 }, { label: "More than 8 hours", value: 4 } ]
+              }
+            }
+          },
+          questions: []
+        },
+        {
           id: "expertise",
           label: "Proficiency",
           title: "Proficiency",
@@ -283,35 +338,12 @@ window.SURVEY_CONFIG = {
           ]
         },
         {
-          id: "time_gains",
-          label: "Time gains",
-          title: "Time gains",
-          show: {
-            definition: "The time saved by using generative AI for an activity: the time a competent person (not a beginner or an expert) would need without AI, minus the time spent with AI.",
-            taxonomy: "Broad, roughly logarithmic bands, which reduce classification errors:",
-            taxonomyList: [
-              { term: "Less than 5 minutes", text: "A few minutes of work." },
-              { term: "5 minutes to 1 hour", text: "Between a few minutes and an hour’s work." },
-              { term: "1 to 8 hours", text: "Between an hour and a day’s work." },
-              { term: "More than 8 hours", text: "More than a day’s work; can be split further." }
-            ],
-            example: {
-              chart: {
-                title: "Share of messages by time saved, Country A",
-                unit: "%",
-                bars: [ { label: "Less than 5 minutes", value: 41 }, { label: "5 minutes to 1 hour", value: 38 }, { label: "1 to 8 hours", value: 17 }, { label: "More than 8 hours", value: 4 } ]
-              }
-            }
-          },
-          questions: []
-        },
-        {
           id: "language",
-          label: "Language of interaction",
-          title: "Language of interaction",
+          label: "Language of Interaction",
+          title: "Language of Interaction",
           show: {
-            definition: "The share of messages in each of a country’s main languages, per quarter. This shows adoption against the availability of good models in national languages, and could guide investment in low-resource language data. It is recorded, not inferred.",
-            taxonomy: "For every country, the languages spoken by at least 10% of the population, as listed by the Development Data Partnership.",
+            definition: "The share of messages in each of a country’s main languages, per quarter.",
+            taxonomy: "For every country, the languages spoken by at least 10% of the population.",
             example: {
               chart: {
                 type: "split",
@@ -324,33 +356,15 @@ window.SURVEY_CONFIG = {
           questions: []
         },
         {
-          id: "automation",
-          label: "Automation vs augmentation",
-          title: "Automation / augmentation",
-          show: {
-            definition: "Whether AI completes a task on its own (automation) or supports a person who remains in charge of it (augmentation). For labor-market specialists this is replacement versus augmentation of tasks; in education, learning versus offloading; in digital development, which tasks are handed over to AI.",
-            taxonomy: "Two options are under discussion: a new classification combining the frameworks the labs already use (for example, directive and feedback-loop chats as automation; task iteration, learning and validation as augmentation), or a simpler asking / doing / expressing framework.",
-            example: {
-              chart: {
-                type: "split",
-                title: "Share of messages that automate or augment work, Country A",
-                parts: [ { name: "Augmentation", value: 54 }, { name: "Automation", value: 46 } ]
-              }
-            }
-          },
-          questions: [
-            { id: "best_option", type: "single", label: "Which option is better suited to classify chats by this indicator?",
-              options: ["A new classification combining the labs’ frameworks", "An asking / doing / expressing framework", "None of these", "Not sure"] },
-            { id: "own_definition", type: "textarea", label: "How would you define this indicator if you could choose the categories behind it?" }
-          ]
-        },
-        {
           id: "time_of_use",
-          label: "Time of use",
-          title: "Time of use",
+          label: "Time of Use",
+          title: "Time of Use",
           show: {
-            definition: "When consumer chat is used: time of day, day of week and day of month. This is recorded, not inferred. Research shows nighttime use leans towards philosophical discussion and daytime use towards work.",
-            taxonomy: "Each lab provides the distribution of its chats across hours of the day, days of the week and days of the month, aggregated separately for a typical weekday and a typical weekend.",
+            definition: "When consumer chat is used: time of day, day of week and day of month. This is recorded, not inferred.",
+            taxonomyBullets: [
+              { term: "Option 1:", text: "Hourly bands + weekday/weekend." },
+              { term: "Option 2:", text: "4-hourly bands combined with a weekday/weekend tag." }
+            ],
             example: {
               chart: {
                 title: "Share of weekday messages by time of day, Country A",
@@ -362,7 +376,10 @@ window.SURVEY_CONFIG = {
               }
             }
           },
-          questions: []
+          questions: [
+            { id: "taxonomy_option", type: "single", label: "Which taxonomy option do you prefer?",
+              options: ["Option 1: Hourly bands + weekday/weekend", "Option 2: 4-hourly bands with a weekday/weekend tag"], allowOther: true, otherLabel: "Another option (please specify)" }
+          ]
         }
       ]
     }
@@ -378,7 +395,7 @@ window.SURVEY_CONFIG = {
 
     // `phrase` builds the example sentence: {x} is the selected category name.
     indicators: [
-      { id: "use_case", label: "Use case", cats: ["Work", "Personal use", "Education"], weights: [46, 38, 16],
+      { id: "use_case", label: "Use Case", cats: ["Work", "Personal use", "Education"], weights: [46, 38, 16],
         phrase: "are {x}", lower: true },
       { id: "work_activities", label: "Work Activity",
         cats: ["Information Input", "Mental Processes", "Work Output", "Interacting with Others"], weights: [16, 34, 22, 28],
@@ -392,15 +409,15 @@ window.SURVEY_CONFIG = {
       { id: "industry", label: "Industry",
         cats: ["Human health and social work", "Education", "Financial and insurance activities", "Information and communication", "Other industries"], weights: [30, 14, 10, 9, 37],
         phrase: "relate to {x}", lower: true, note: "Industry shows the four largest industry groups plus all others." },
+      { id: "automation", label: "Automation vs Augmentation", cats: ["Augmentation", "Automation"], weights: [54, 46],
+        phrase: "{x} work", words: { Augmentation: "augment", Automation: "automate" } },
+      { id: "time_gains", label: "Time Gains", cats: ["Less than 5 minutes", "5 minutes to 1 hour", "1 to 8 hours", "More than 8 hours"], weights: [41, 38, 17, 4],
+        phrase: "save {x}", words: { "Less than 5 minutes": "less than 5 minutes", "5 minutes to 1 hour": "between 5 minutes and an hour", "1 to 8 hours": "between 1 and 8 hours", "More than 8 hours": "more than 8 hours" } },
       { id: "expertise", label: "Proficiency", cats: ["High", "Medium", "Low"], weights: [19, 44, 37],
         phrase: "need {x} domain expertise", lower: true, note: "Proficiency uses the low / medium / high domain expertise option." },
-      { id: "time_gains", label: "Time gains", cats: ["Less than 5 minutes", "5 minutes to 1 hour", "1 to 8 hours", "More than 8 hours"], weights: [41, 38, 17, 4],
-        phrase: "save {x}", words: { "Less than 5 minutes": "less than 5 minutes", "5 minutes to 1 hour": "between 5 minutes and an hour", "1 to 8 hours": "between 1 and 8 hours", "More than 8 hours": "more than 8 hours" } },
-      { id: "language", label: "Language of interaction", short: "Language", cats: ["Main national language", "Second national language", "Other languages"], weights: [61, 33, 6],
+      { id: "language", label: "Language of Interaction", short: "Language", cats: ["Main national language", "Second national language", "Other languages"], weights: [61, 33, 6],
         phrase: "are in the {x}", lower: true, note: "Language shows a country's two main languages plus all others." },
-      { id: "automation", label: "Automation vs augmentation", cats: ["Augmentation", "Automation"], weights: [54, 46],
-        phrase: "{x} work", words: { Augmentation: "augment", Automation: "automate" } },
-      { id: "time_of_use", label: "Time of use", cats: ["Weekday working hours", "Weekday evenings", "Weekends", "Late night"], weights: [44, 24, 22, 10],
+      { id: "time_of_use", label: "Time of Use", cats: ["Weekday working hours", "Weekday evenings", "Weekends", "Late night"], weights: [44, 24, 22, 10],
         phrase: "are sent {x}", words: { "Weekday working hours": "during weekday working hours", "Weekday evenings": "on weekday evenings", "Weekends": "at weekends", "Late night": "late at night" },
         note: "Time of use categories are placeholders." }
     ],
@@ -412,10 +429,17 @@ window.SURVEY_CONFIG = {
     // A featured combination with its own chart and questions, shown below the builder.
     featured: {
       id: "combo_uc_wa",
+      hidden: true,             // remove this line to show the section again
       heading: "Filter Work Chats",
       showChart: true,          // false hides the chart
       summary: [
-        "After classifying chats as work or non-work, we can classify ALL chats by O*NET Work Activities, or ONLY the work chats.",
+        "After classifying chats by Use Case (Work/Non-work), we can:"
+      ],
+      bullets: [
+        { term: "Option 1:", text: "Classify ALL the chats by Work Activities separately." },
+        { term: "Option 2:", text: "Classify Work chats by Work Activities, Personal Use chats by Time Use Surveys and Education chats by a different taxonomy." }
+      ],
+      summaryAfter: [
         "This means Personal Use & Educational Use will be measured by Work Activity taxonomies."
       ],
       chart: {

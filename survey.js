@@ -381,7 +381,8 @@
         const tbl = t => !t ? null : el("div", { class: "table-scroll" }, [el("table", { class: "ex tax-table" }, [
           el("thead", null, [el("tr", null, t.columns.map(c => el("th", { scope: "col", text: c })))]),
           el("tbody", null, t.rows.map(r => el("tr", null, r.map((c, i) => el(i === 1 ? "th" : "td", i === 1 ? { scope: "row", text: c } : { text: c })))))])]);
-        const bullets = !s.taxonomyBullets ? null : el("ul", { class: "tax-bullets" }, s.taxonomyBullets.map(b => el("li", null, [el("b", { text: b.term }), b.text ? document.createTextNode(" " + b.text) : null])));
+        const bulletList = list => el("ul", { class: "tax-bullets" }, list.map(b => el("li", null, [el("b", { text: b.term }), b.text ? document.createTextNode(" " + b.text) : null, b.sub ? bulletList(b.sub) : null])));
+        const bullets = s.taxonomyBullets ? bulletList(s.taxonomyBullets) : null;
         dte.appendChild(sec("Taxonomy", [s.taxonomy ? el("p", { text: s.taxonomy }) : null, bullets, maybeCollapsed(s.taxonomyList, s.taxonomyListSummary), tbl(s.taxonomyTable)]
           .concat((s.pillGroups || []).map(renderPillGroup))));
       }
@@ -548,7 +549,7 @@
   }
   function storyNodes(model) {
     const p = model.shares.map(s => Math.round(s * 100) + "%");
-    const out = [document.createTextNode(`In ${COUNTRY}, `), el("b", { text: p[0] }), document.createTextNode(" of messages ")];
+    const out = [document.createTextNode(`In ${COUNTRY}, `), el("b", { text: p[0] }), document.createTextNode(" of conversations ")];
     out.push(...phraseNodes(model.inds[0], model.inds[0].cats[model.hl[0]], COMBO_COLORS[0]), document.createTextNode("."));
     for (let i = 1; i < model.inds.length; i++) {
       out.push(document.createTextNode(i === 1 ? " Of these, " : i === model.inds.length - 1 ? ", and " : ", "), el("b", { text: p[i] }), document.createTextNode(i === 1 ? " " : " of these "));
@@ -561,7 +562,7 @@
   function nestedBoxes(model) {
     const fmtPct = v => (v >= 0.1 ? Math.round(v * 1000) / 10 : Math.round(v * 10000) / 100) + "%";
     let cum = 1;
-    const steps = [{ name: "All messages", cum: 1, color: "var(--neutral-500)" }].concat(model.inds.map((ind, i) => {
+    const steps = [{ name: "All conversations", cum: 1, color: "var(--neutral-500)" }].concat(model.inds.map((ind, i) => {
       cum *= model.shares[i];
       return { name: ind.cats[model.hl[i]], ind: ind.short || ind.label, share: model.shares[i], cum, color: COMBO_COLORS[i % COMBO_COLORS.length] };
     }));
@@ -569,7 +570,7 @@
       style: `--indicator-color:${s.color};width:${Math.sqrt(s.cum) * 100}%;height:${Math.sqrt(s.cum) * 100}%` }, [el("span", { text: fmtPct(s.cum) })])));
     const legend = el("ol", { class: "nest-legend" }, steps.map((s, i) => el("li", { style: `--indicator-color:${s.color}` }, [
       el("b", { text: s.name }),
-      i ? el("span", { text: `${s.ind}: ${Math.round(s.share * 100)}% of ${i === 1 ? "all messages" : "those"}` }) : null])));
+      i ? el("span", { text: `${s.ind}: ${Math.round(s.share * 100)}% of ${i === 1 ? "all conversations" : "those"}` }) : null])));
     return el("div", { class: "nest-wrap", "aria-hidden": "true" }, [plot, legend]);
   }
 
@@ -604,18 +605,18 @@
     const addBtn = el("button", { type: "button", class: "btn btn-primary", text: "Add to my priorities" });
     const addMsg = el("p", { class: "add-msg", "aria-live": "polite" });
     bq.appendChild(el("div", { class: "q" }, [el("label", { class: "q-label", for: "builder_use_for", text: qUse ? qUse.label : "What would you use it for?" }), useArea]));
-    bq.appendChild(el("div", { class: "actions" }, [addBtn]));
-    bq.appendChild(addMsg);
+    leftInner.appendChild(el("div", { class: "actions" }, [addBtn]));
+    leftInner.appendChild(addMsg);
     const dataBox = el("details", { class: "data" }, [el("summary", { text: "See example data" })]);
     // The example-data table is off unless `showExampleData: true` is set in questions.js.
     if (combosCfg.showExampleData) leftInner.appendChild(dataBox);
 
     const prioCard = el("div", { class: "card" }, [el("h3", { text: "Your priority combinations" }),
-      el("p", { class: "pick-note", text: `Put the combination you need most at the top. You can add up to ${combosCfg.maxPriorities || 5}.` })]);
+      el("p", { class: "pick-note", text: `You can add up to ${combosCfg.maxPriorities || 5} combinations by selecting “Add to my priorities”.` })]);
     const prioList = el("ol", { class: "prio" });
     prioCard.appendChild(prioList);
+    right.appendChild(bq);
     right.appendChild(prioCard);
-    leftInner.appendChild(bq);   // the "Add to my priorities" questions sit right under the summary
     section.appendChild(builder);
 
     function drawPills() {
@@ -704,13 +705,15 @@
 
     // featured combination with its own questions
     const f = combosCfg.featured;
-    if (f) {
+    if (f && !f.hidden) {
       const wrap = el("div", { class: "featured" }, [el("h2", { class: "section-label", text: f.heading || combosCfg.featuredHeading || "A combination we are considering, and would like your feedback on" })]);
       const panel = el("div", { class: "panel" });
       const left = el("div", { class: "panel-left" });
       const inner = el("div", { class: "left-inner" }, [f.title ? el("h2", { text: f.title }) : null]);
       if (f.pills) inner.appendChild(el("div", { class: "combo-pills" }, f.pills.flatMap((p, i) => [i ? el("span", { class: "plus", "aria-hidden": "true", text: "×" }) : null, el("span", { class: "pill", text: p })]).filter(Boolean)));
       if (f.summary) [].concat(f.summary).forEach(t => inner.appendChild(el("p", { class: "summary", text: t })));
+      if (f.bullets) inner.appendChild(el("ul", { class: "tax-bullets" }, f.bullets.map(b => el("li", null, [el("b", { text: b.term }), b.text ? document.createTextNode(" " + b.text) : null]))));
+      if (f.summaryAfter) [].concat(f.summaryAfter).forEach(t => inner.appendChild(el("p", { class: "summary", text: t })));
       if (f.chart && f.showChart !== false) {
         const fig = el("figure", { class: "chart" }, [el("figcaption", { class: "chart-title", text: f.chart.title })]);
         fig.appendChild(f.chart.type === "treemap" ? C.treemap({ label: f.chart.title, groups: f.chart.groups })

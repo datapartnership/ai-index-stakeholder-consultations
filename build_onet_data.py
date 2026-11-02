@@ -5,13 +5,13 @@ Build the survey's O*NET data files from the official O*NET database download.
 Input: a folder (or .zip) containing these O*NET files, as CSV, Excel or tab-delimited text:
     Content Model Reference, IWA Reference, DWA Reference, Task Statements, Occupation Data
 
-Output (written to ../data/ by default):
+Output (JSON written to src/StakeholderConsultations.Web/wwwroot/data/ by default):
     onet_activities.json   GWA -> IWA -> DWA hierarchy, used by the survey page
     soc_tasks.json         the 23 SOC major groups -> occupations -> task statements
-    soc_tasks.csv          the same tasks as one flat table (opens in Excel)
+    data/soc_tasks.csv     the same tasks as one flat table, outside the public web root
 
 Usage:
-    python3 tools/build_onet_data.py <folder-or-zip> --release "31.0" --date "August 2026"
+    python3 build_onet_data.py <folder-or-zip> --release "31.0" --date "August 2026"
 """
 import argparse, csv, io, json, re, sys, zipfile
 from pathlib import Path
@@ -120,7 +120,9 @@ def main():
     ap.add_argument("source", type=Path)
     ap.add_argument("--release", default="31.0")
     ap.add_argument("--date", default="August 2026")
-    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parent.parent / "data")
+    root = Path(__file__).resolve().parent
+    ap.add_argument("--out", type=Path, default=root / "src/StakeholderConsultations.Web/wwwroot/data")
+    ap.add_argument("--csv-out", type=Path, default=root / "data/soc_tasks.csv")
     a = ap.parse_args()
 
     src = collect_sources(a.source)
@@ -207,7 +209,8 @@ def main():
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "onet_activities.json").write_text(json.dumps(activities, ensure_ascii=False, indent=1), encoding="utf-8")
     (a.out / "soc_tasks.json").write_text(json.dumps(soc, ensure_ascii=False, indent=1), encoding="utf-8")
-    with open(a.out / "soc_tasks.csv", "w", newline="", encoding="utf-8-sig") as f:
+    a.csv_out.parent.mkdir(parents=True, exist_ok=True)
+    with open(a.csv_out, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         w.writerow(["SOC major group code", "SOC major group", "O*NET-SOC code", "Occupation", "Task ID", "Task", "Task type"])
         w.writerows(flat)

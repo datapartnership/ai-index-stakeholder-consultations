@@ -213,5 +213,60 @@
     return grid;
   }
 
-  window.SurveyCharts = { PALETTE, OTHER, unit, pct, donut, sankey, smallMultiples };
+  // ---------- one bar split into parts ----------
+  // opts: { label, parts:[{name, value (percent)}] }
+  function splitBar(opts) {
+    const total = opts.parts.reduce((s, p) => s + p.value, 0) || 1;
+    const color = (p, i) => (/^(other|all other)/i.test(p.name) ? OTHER : PALETTE[i % PALETTE.length]);
+    const bar = h("div", { class: "split-bar", role: "img", "aria-label": opts.label + ": " + opts.parts.map(p => `${p.name} ${p.value}%`).join(", ") },
+      opts.parts.map((p, i) => h("div", { class: "split-seg", style: `flex:${p.value / total} 1 0;background:${color(p, i)}`, title: `${p.name}: ${p.value}%`, text: p.value / total >= 0.06 ? p.value + "%" : "" })));
+    const legend = h("div", { class: "legend", "aria-hidden": "true" },
+      opts.parts.map((p, i) => h("span", null, [h("i", { style: `background:${color(p, i)}` }), document.createTextNode(`${p.name} (${p.value}%)`)])));
+    return h("div", { class: "split" }, [bar, legend]);
+  }
+
+  // ---------- nested treemap: group boxes containing item tiles sized by value ----------
+  // opts: { label, unit:"%", groups:[{name, items:[{name, value}]}] }
+  function squarify(items, x, y, w, h) {
+    const out = [], rest = items.slice().sort((a, b) => b.value - a.value);
+    const scale = (w * h) / (rest.reduce((s, i) => s + i.value, 0) || 1);
+    const worst = (row, len) => {
+      const a = row.map(r => r.value * scale), s = a.reduce((p, q) => p + q, 0);
+      return Math.max((len * len * Math.max(...a)) / (s * s), (s * s) / (len * len * Math.min(...a)));
+    };
+    const layRow = row => {
+      const s = row.reduce((p, r) => p + r.value * scale, 0);
+      if (w >= h) { const rw = s / h; let yy = y; row.forEach(r => { const rh = (r.value * scale) / rw; out.push({ item: r, x, y: yy, w: rw, h: rh }); yy += rh; }); x += rw; w -= rw; }
+      else { const rh = s / w; let xx = x; row.forEach(r => { const cw = (r.value * scale) / rh; out.push({ item: r, x: xx, y, w: cw, h: rh }); xx += cw; }); y += rh; h -= rh; }
+    };
+    let row = [];
+    while (rest.length) {
+      const len = Math.min(w, h);
+      if (!row.length || worst(row.concat(rest[0]), len) <= worst(row, len)) row.push(rest.shift());
+      else { layRow(row); row = []; }
+    }
+    if (row.length) layRow(row);
+    return out;
+  }
+  function treemap(opts) {
+    const unitTxt = opts.unit == null ? "%" : opts.unit, ASPECT = 1.6;
+    const groups = opts.groups.map(g => Object.assign({}, g, { value: g.items.reduce((s, i) => s + i.value, 0) }));
+    const all = groups.flatMap(g => g.items.map(i => `${i.name} (${g.name}): ${i.value}${unitTxt}`)).join("; ");
+    const box = h("div", { class: "tm", role: "img", "aria-label": `${opts.label}. ${all}` });
+    squarify(groups, 0, 0, ASPECT, 1).forEach((g, gi) => {
+      const color = PALETTE[gi % PALETTE.length];
+      const area = h("div", { class: "tm-area" }), aw = g.w / g.h;
+      squarify(g.item.items, 0, 0, aw, 1).forEach((t, ti) => {
+        const big = t.w * t.h > 0.03 * aw;
+        area.appendChild(h("div", { class: "tm-tile", title: `${t.item.name}: ${t.item.value}${unitTxt}`,
+          style: `--c:${color};--k:${[34, 24, 44][ti % 3]}%;left:${(t.x / aw) * 100}%;top:${t.y * 100}%;width:${(t.w / aw) * 100}%;height:${t.h * 100}%` },
+          big ? [h("b", { text: t.item.name }), h("span", { text: t.item.value + unitTxt })] : []));
+      });
+      box.appendChild(h("div", { class: "tm-cat", style: `--c:${color};left:${(g.x / ASPECT) * 100}%;top:${g.y * 100}%;width:${(g.w / ASPECT) * 100}%;height:${g.h * 100}%` },
+        [h("p", { text: `${g.item.name} · ${Math.round(g.item.value * 10) / 10}${unitTxt}` }), area]));
+    });
+    return box;
+  }
+
+  window.SurveyCharts = { PALETTE, OTHER, unit, pct, donut, sankey, smallMultiples, splitBar, treemap };
 })();

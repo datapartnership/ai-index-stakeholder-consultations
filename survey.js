@@ -16,6 +16,9 @@
     return;
   }
   const page = cfg.pages[0];
+  // Indicators marked `hidden: true` in questions.js are kept in the file but left off the page.
+  page.indicators = page.indicators.filter(x => !x.hidden);
+  if (cfg.combinations) cfg.combinations.indicators = cfg.combinations.indicators.filter(x => !x.hidden);
   const combosCfg = cfg.combinations || null;
   const endpoint = cfg.endpointUrl || cfg.flowUrl || "";
   const testMode = !endpoint || /PASTE_YOUR_/.test(endpoint);
@@ -47,7 +50,7 @@
   const activeIndicator = {};
   const fields = [];
   let saveTimer = null;
-  let view = "objectives";
+  let view = "single";
   const combo = { sel: [], priorities: [] };
 
   // ---------- helpers ----------
@@ -69,14 +72,17 @@
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); });
   }
+  // Answers are kept in memory only, never in browser storage, so closing or reloading the
+  // page clears them. (The test-mode "Back to the survey" button uses this copy.)
+  let memoryDraft = null;
+  try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* nothing stored */ }
   function storage(action, value) {
-    try {
-      if (action === "get") return JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
-      if (action === "set") localStorage.setItem(DRAFT_KEY, JSON.stringify(value));
-      if (action === "clear") localStorage.removeItem(DRAFT_KEY);
-    } catch (e) { /* storage unavailable: the survey still works, just without drafts */ }
+    if (action === "get") return memoryDraft;
+    if (action === "set") memoryDraft = value;
+    if (action === "clear") memoryDraft = null;
     return null;
   }
+
   const dataCache = {};
   function loadJson(url) {
     if (!dataCache[url]) dataCache[url] = fetch(url, { cache: "no-cache" }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
@@ -106,6 +112,11 @@
       const t = q.type === "single" ? "radio" : "checkbox";
       (q.options || []).forEach(opt => body.appendChild(el("label", { class: "opt" }, [
         el("input", { type: t, name, value: opt, "aria-describedby": describedBy }), el("span", { text: opt })])));
+      if (t === "checkbox" && q.max) body.addEventListener("change", () => {
+        const boxes = Array.from(body.querySelectorAll('input[type="checkbox"]'));
+        const full = boxes.filter(b => b.checked).length >= q.max;
+        boxes.forEach(b => (b.disabled = full && !b.checked));
+      });
       if (q.allowOther) {
         body.appendChild(el("label", { class: "opt" }, [
           el("input", { type: t, name, value: OTHER, "aria-describedby": describedBy }), el("span", { text: q.otherLabel || "Other (please specify)" })]));
@@ -244,9 +255,6 @@
       box.innerHTML = "";
       const cats = buildActivityModel(data);
       const counts = data ? data.counts : { gwa: 41, iwa: 332 };
-      box.appendChild(el("p", { class: "lead", text: data
-        ? `There are ${fmt(counts.gwa)} General Work Activities (GWAs), ${fmt(counts.iwa)} Intermediate Work Activities (IWAs) and ${fmt(counts.dwa)} Detailed Work Activities (DWAs), as of the ${data.source.replace(/ Database$/, "")} release (${data.released}).`
-        : "There are 41 General Work Activities (GWAs) and 332 Intermediate Work Activities (IWAs) in O*NET." }));
 
       const levels = [["gwa", "GWA"], ["iwa", "IWA"], ["dwa", "DWA"], ["task", "Task"]];
       const bar = el("div", { class: "lvl-pills", role: "group", "aria-label": "Level of detail" });
@@ -341,17 +349,79 @@
     return box;
   }
 
+  function renderAnyChart(c) {
+    if (c.type === "stacked100" || c.type === "split") {
+      const fig = el("figure", { class: "chart" }, [el("figcaption", { class: "chart-title", text: c.title })]);
+      fig.appendChild(c.type === "split" ? C.splitBar({ label: c.title, parts: c.parts }) : C.stacked100({ label: c.title, periods: c.periods, series: c.series }));
+      fig.appendChild(el("p", { class: "chart-note", text: [c.noteOverride || NOTE, c.note].filter(Boolean).join(" ") }));
+      return fig;
+    }
+    return renderChart(c);
+  }
+
   function renderLeft(ind) {
     const left = el("div", { class: "panel-left" });
     const inner = el("div", { class: "left-inner" }, [el("h2", { text: ind.title || ind.label })]);
     const s = ind.show;
+    if (s && (s.definition || s.taxonomy || s.example)) {
+      // Definition / Taxonomy / Example format
+      const dte = el("div", { class: "dte" });
+      const sec = (title, kids) => el("section", { class: "dte-sec" }, [el("h3", { text: title })].concat(kids.filter(Boolean)));
+      const defs = list => list ? el("dl", { class: "defs" }, list.map(d => el("div", null, [el("dt", { text: d.term }), el("dd", { text: d.text })]))) : null;
+      const maybeCollapsed = (list, summary) => !list ? null : summary
+        ? el("details", { class: "defs-more" }, [el("summary", { text: summary }), defs(list)]) : defs(list);
+      const defP = () => {
+        const p = el("p"), hl = s.definitionHighlight, at = hl ? s.definition.indexOf(hl) : -1;
+        if (at < 0) { p.textContent = s.definition; return p; }
+        p.append(s.definition.slice(0, at), el("mark", { class: "hl hl-a", text: hl }), s.definition.slice(at + hl.length));
+        return p;
+      };
+      if (s.definition) dte.appendChild(sec("Definition", [defP(), maybeCollapsed(s.definitionList, s.definitionListSummary)]));
+      if (s.taxonomy || s.pillGroups || s.taxonomyList || s.taxonomyTable || s.taxonomyBullets) {
+        const tbl = t => !t ? null : el("div", { class: "table-scroll" }, [el("table", { class: "ex tax-table" }, [
+          el("thead", null, [el("tr", null, t.columns.map(c => el("th", { scope: "col", text: c })))]),
+          el("tbody", null, t.rows.map(r => el("tr", null, r.map((c, i) => el(i === 1 ? "th" : "td", i === 1 ? { scope: "row", text: c } : { text: c })))))])]);
+        const bullets = !s.taxonomyBullets ? null : el("ul", { class: "tax-bullets" }, s.taxonomyBullets.map(b => el("li", null, [el("b", { text: b.term }), b.text ? document.createTextNode(" " + b.text) : null])));
+        dte.appendChild(sec("Taxonomy", [s.taxonomy ? el("p", { text: s.taxonomy }) : null, bullets, maybeCollapsed(s.taxonomyList, s.taxonomyListSummary), tbl(s.taxonomyTable)]
+          .concat((s.pillGroups || []).map(renderPillGroup))));
+      }
+      const ex = s.example || {};
+      const exKids = [ex.lead ? el("p", { text: ex.lead }) : null];
+      if (ex.explorer) { left.classList.add("long"); exKids.push(renderExplorer(ex.explorer)); }
+      if (ex.chart) exKids.push(renderAnyChart(ex.chart));
+      if (!ex.explorer && !ex.chart) exKids.push(el("p", { class: "empty", text: ex.note || "An example will be added soon." }));
+      dte.appendChild(sec("Example", exKids));
+      inner.appendChild(dte);
+      left.appendChild(inner);
+      return left;
+    }
     if (!s) {
       inner.appendChild(el("p", { class: "empty", text: "An example of the measurements this indicator would allow will be added soon. You can still tell us how relevant it is." }));
     } else {
+      if (s.what || s.how) {
+        const wh = el("dl", { class: "what-how" });
+        if (s.what) wh.appendChild(el("div", { class: "wh-row" }, [el("dt", { text: "What" }), el("dd", { text: s.what })]));
+        if (s.how) {
+          const dd = el("dd", null, [el("p", { text: s.how })]);
+          if (s.howList) dd.appendChild(el("dl", { class: "defs" }, s.howList.map(d => el("div", null, [el("dt", { text: d.term }), el("dd", { text: d.text })]))));
+          wh.appendChild(el("div", { class: "wh-row" }, [el("dt", { text: "How" }), dd]));
+        }
+        inner.appendChild(wh);
+      }
       if (s.summary) inner.appendChild(el("p", { class: "summary", text: s.summary }));
+      if (s.definitions) {
+        inner.appendChild(el("h3", { text: s.definitionsHeading || "Definitions" }));
+        inner.appendChild(el("dl", { class: "defs" }, s.definitions.map(d => el("div", null, [el("dt", { text: d.term }), el("dd", { text: d.text })]))));
+      }
+      if (s.exampleHeading) inner.appendChild(el("h3", { text: s.exampleHeading }));
       if (s.lead) inner.appendChild(el("p", { class: "lead", text: s.lead }));
       if (s.explorer) { left.classList.add("long"); inner.appendChild(renderExplorer(s.explorer)); }
-      if (s.chart) inner.appendChild(renderChart(s.chart));
+      if (s.chart && s.chart.type === "stacked100") {
+        const fig = el("figure", { class: "chart" }, [el("figcaption", { class: "chart-title", text: s.chart.title })]);
+        fig.appendChild(C.stacked100({ label: s.chart.title, periods: s.chart.periods, series: s.chart.series }));
+        fig.appendChild(el("p", { class: "chart-note", text: [s.chart.noteOverride || NOTE, s.chart.note].filter(Boolean).join(" ") }));
+        inner.appendChild(fig);
+      } else if (s.chart) inner.appendChild(renderChart(s.chart));
       (s.pillGroups || []).forEach(g => inner.appendChild(renderPillGroup(g)));
       if (s.heading) inner.appendChild(el("h3", { text: s.heading }));
       const paras = Array.isArray(s.text) ? s.text : (s.text ? [s.text] : []);
@@ -399,7 +469,8 @@
       panel.appendChild(renderLeft(ind));
       const qs = el("div", { class: "panel-right" });
       const meta = { indicatorId: ind.id };
-      (ind.questionsBefore || []).concat(page.commonQuestions || [], ind.questions || []).forEach(q => qs.appendChild(renderQuestion(q, prefix, meta)));
+      const common = (page.commonQuestions || []).filter(q => !(ind.skipCommon || []).includes(q.id));
+      (ind.questionsBefore || []).concat(common, ind.questions || []).forEach(q => qs.appendChild(renderQuestion(q, prefix, meta)));
       const nav = el("div", { class: "panel-nav" });
       const prev = page.indicators[k - 1], next = page.indicators[k + 1];
       if (prev) { const b = el("button", { type: "button", class: "btn btn-secondary", text: "Previous: " + prev.label }); b.addEventListener("click", () => selectIndicator(prev.id, true, true)); nav.appendChild(b); }
@@ -412,17 +483,7 @@
     return section;
   }
 
-  function renderObjectivesView() {
-    const section = el("section", { class: "view objectives", id: "view_objectives", role: "tabpanel", "aria-labelledby": "vt_objectives", hidden: true });
-    const content = el("div", { class: "objectives-copy" });
-    content.appendChild(el("h2", { class: "section-label", text: "Objectives" }));
-    content.appendChild(el("p", { text: "The Global AI Adoption Index is a joint initiative between international organizations and leading technology companies to establish the first harmonized, multi-company measurement system for global generative AI adoption, informed by stakeholder input. The initiative is building a coalition and infrastructure durable enough to publish AI Adoption indices as a quarterly recurring statistical output for global public consumption, with support from the World Bank Group, OECD, and the IMF." }));
-    content.appendChild(el("p", { text: "The initiative is structured around three workstreams – Technical Committee, Stakeholder Consultation, and Supplemental Research." }));
-    content.appendChild(el("h3", { text: "We want you to help us" }));
-    content.appendChild(el("ul", { class: "objective-list" }, [el("li", { text: "Prioritize and substantiate the indicators that would be most useful to you. For each indicator, we outline what you may see in the AI Index and ask you questions about its usefulness." })]));
-    section.appendChild(content);
-    return section;
-  }
+
 
   function selectIndicator(indId, updateHash, scroll) {
     activeIndicator.id = indId;
@@ -443,7 +504,8 @@
 
   // ---------- indicator combinations view ----------
   const comboInd = id => combosCfg.indicators.find(x => x.id === id);
-  const comboName = ids => ids.map(id => { const x = comboInd(id); return x ? (x.short || x.label) : id; }).join(" → ");
+  const comboName = ids => ids.map(id => { const x = comboInd(id); return x ? (x.short || x.label) : id; }).join(" × ");
+  const COMBO_COLORS = ["#1e5aa8", "#b5471e", "#16735b", "#885d00"];
 
   function comboModel(ids) {
     const inds = ids.map(comboInd);
@@ -473,24 +535,42 @@
     });
     return { inds, paths, hl, shares };
   }
-  function phraseFor(ind, cat) {
+  function phraseNodes(ind, cat, color) {
     let x = ind.words && ind.words[cat] ? ind.words[cat] : cat;
     if (ind.stripCode) x = x.replace(/\s*\([A-Z]\)$/, "");
     if (ind.lower && !(ind.words && ind.words[cat])) x = x.replace(/^Other /, "other ").toLowerCase().replace(/\bict\b/, "ICT");
-    return (ind.phrase || "are {x}").replace("{x}", x);
+    const phrase = ind.phrase || "are {x}";
+    const marker = phrase.indexOf("{x}");
+    if (marker < 0) return [document.createTextNode(phrase)];
+    return [document.createTextNode(phrase.slice(0, marker)),
+      el("span", { class: "story-category", style: `--indicator-color:${color}`, text: x }),
+      document.createTextNode(phrase.slice(marker + 3))];
   }
   function storyNodes(model) {
     const p = model.shares.map(s => Math.round(s * 100) + "%");
-    const ph = model.inds.map((ind, c) => phraseFor(ind, ind.cats[model.hl[c]]));
-    const out = [document.createTextNode(`In ${COUNTRY}, `), el("b", { text: p[0] }), document.createTextNode(` of messages ${ph[0]}.`)];
-    if (ph.length > 1) {
-      out.push(document.createTextNode(" Of those, "), el("b", { text: p[1] }), document.createTextNode(` ${ph[1]}`));
-      for (let i = 2; i < ph.length; i++) {
-        out.push(document.createTextNode(i === ph.length - 1 ? ", and " : ", "), el("b", { text: p[i] }), document.createTextNode(` of those ${ph[i]}`));
-      }
-      out.push(document.createTextNode("."));
+    const out = [document.createTextNode(`In ${COUNTRY}, `), el("b", { text: p[0] }), document.createTextNode(" of messages ")];
+    out.push(...phraseNodes(model.inds[0], model.inds[0].cats[model.hl[0]], COMBO_COLORS[0]), document.createTextNode("."));
+    for (let i = 1; i < model.inds.length; i++) {
+      out.push(document.createTextNode(i === 1 ? " Of these, " : i === model.inds.length - 1 ? ", and " : ", "), el("b", { text: p[i] }), document.createTextNode(i === 1 ? " " : " of these "));
+      out.push(...phraseNodes(model.inds[i], model.inds[i].cats[model.hl[i]], COMBO_COLORS[i % COMBO_COLORS.length]));
     }
+    if (model.inds.length > 1) out.push(document.createTextNode("."));
     return out;
+  }
+  // Boxes share the bottom-left corner; each box's area is its share of all messages.
+  function nestedBoxes(model) {
+    const fmtPct = v => (v >= 0.1 ? Math.round(v * 1000) / 10 : Math.round(v * 10000) / 100) + "%";
+    let cum = 1;
+    const steps = [{ name: "All messages", cum: 1, color: "var(--neutral-500)" }].concat(model.inds.map((ind, i) => {
+      cum *= model.shares[i];
+      return { name: ind.cats[model.hl[i]], ind: ind.short || ind.label, share: model.shares[i], cum, color: COMBO_COLORS[i % COMBO_COLORS.length] };
+    }));
+    const plot = el("div", { class: "nest-plot" }, steps.map(s => el("div", { class: "nest-box" + (Math.sqrt(s.cum) < 0.16 ? " tiny" : ""),
+      style: `--indicator-color:${s.color};width:${Math.sqrt(s.cum) * 100}%;height:${Math.sqrt(s.cum) * 100}%` }, [el("span", { text: fmtPct(s.cum) })])));
+    const legend = el("ol", { class: "nest-legend" }, steps.map((s, i) => el("li", { style: `--indicator-color:${s.color}` }, [
+      el("b", { text: s.name }),
+      i ? el("span", { text: `${s.ind}: ${Math.round(s.share * 100)}% of ${i === 1 ? "all messages" : "those"}` }) : null])));
+    return el("div", { class: "nest-wrap", "aria-hidden": "true" }, [plot, legend]);
   }
 
   function renderCombosView() {
@@ -519,25 +599,23 @@
     // builder questions (not saved on their own: they travel with each priority)
     const bq = el("div", { class: "card builder-q" });
     const usefulName = "builder_useful";
-    const qUseful = (combosCfg.builderQuestions || [])[0], qUse = (combosCfg.builderQuestions || [])[1];
-    const usefulSet = el("fieldset", { class: "q" }, [el("legend", { class: "q-label", text: qUseful ? qUseful.label : "Is this combination useful to you?" }),
-      el("div", { class: "scale" }, (qUseful ? qUseful.options : ["Yes", "Somewhat", "No", "Not sure"]).map(o => el("label", null, [el("input", { type: "radio", name: usefulName, value: o }), el("span", { text: o })])))]);
+    const qUse = (combosCfg.builderQuestions || []).find(q => q.id === "use_for");
     const useArea = el("textarea", { id: "builder_use_for", maxlength: 2000 });
     const addBtn = el("button", { type: "button", class: "btn btn-primary", text: "Add to my priorities" });
     const addMsg = el("p", { class: "add-msg", "aria-live": "polite" });
-    bq.appendChild(usefulSet);
     bq.appendChild(el("div", { class: "q" }, [el("label", { class: "q-label", for: "builder_use_for", text: qUse ? qUse.label : "What would you use it for?" }), useArea]));
     bq.appendChild(el("div", { class: "actions" }, [addBtn]));
     bq.appendChild(addMsg);
     const dataBox = el("details", { class: "data" }, [el("summary", { text: "See example data" })]);
-    leftInner.appendChild(dataBox);
+    // The example-data table is off unless `showExampleData: true` is set in questions.js.
+    if (combosCfg.showExampleData) leftInner.appendChild(dataBox);
 
     const prioCard = el("div", { class: "card" }, [el("h3", { text: "Your priority combinations" }),
       el("p", { class: "pick-note", text: `Put the combination you need most at the top. You can add up to ${combosCfg.maxPriorities || 5}.` })]);
     const prioList = el("ol", { class: "prio" });
     prioCard.appendChild(prioList);
     right.appendChild(prioCard);
-    right.appendChild(bq);
+    leftInner.appendChild(bq);   // the "Add to my priorities" questions sit right under the summary
     section.appendChild(builder);
 
     function drawPills() {
@@ -547,7 +625,8 @@
         const pos = combo.sel.indexOf(ind.id);
         const on = pos >= 0, full = combo.sel.length >= max;
         const b = el("button", { type: "button", class: "ipill" + (on ? " on" : ""), "aria-pressed": on ? "true" : "false",
-          disabled: ind.disabled || (!on && full) ? true : null, title: ind.disabled ? ind.disabledNote : null }, [
+          disabled: ind.disabled || (!on && full) ? true : null, title: ind.disabled ? ind.disabledNote : null,
+          style: on ? `--indicator-color:${COMBO_COLORS[pos % COMBO_COLORS.length]}` : null }, [
           el("span", { class: "n", "aria-hidden": "true", text: on ? String(pos + 1) : "" }), el("span", { text: ind.label }),
           on ? el("span", { class: "sr-only", text: `, position ${pos + 1}` }) : null]);
         b.addEventListener("click", () => {
@@ -568,22 +647,14 @@
       dataBox.querySelectorAll("table, p").forEach(n => n.remove());
       addMsg.textContent = "";
       if (combo.sel.length < 2) {
-        chartSlot.appendChild(el("p", { class: "empty-card", text: "Pick at least two indicators to see how messages would flow between them." }));
+        chartSlot.appendChild(el("p", { class: "empty-card", text: "Pick at least two indicators to see the message summary." }));
         dataBox.hidden = true; addBtn.disabled = true;
         return;
       }
       dataBox.hidden = false; addBtn.disabled = false;
       const m = comboModel(combo.sel);
-      const first = m.inds[0];
-      const colors = first.cats.map((c, i) => /^Other/.test(c) ? C.OTHER : C.PALETTE[i % C.PALETTE.length]);
-      const fig = el("figure", { class: "sankey-card" }, [el("figcaption", { class: "chart-title", text: `How messages flow across your ${m.inds.length} indicators, ${COUNTRY}` })]);
-      fig.appendChild(C.sankey({ columns: m.inds.map(x => ({ name: x.short || x.label, cats: x.cats })), paths: m.paths, colors, highlight: m.hl,
-        label: `Sankey chart of messages by ${comboName(combo.sel)}` }));
-      fig.appendChild(el("div", { class: "legend" }, first.cats.map((c, i) => el("span", null, [el("i", { style: `background:${colors[i]}` }), document.createTextNode(c)]))
-        .concat([el("span", { class: "muted", text: `Band colour shows ${(first.short || first.label).toLowerCase()}. Band width shows the share of messages. The darker path matches the sentence below.` })])));
-      fig.appendChild(el("p", { class: "chart-note", text: [NOTE].concat(m.inds.map(x => x.note).filter(Boolean)).join(" ") }));
-      chartSlot.appendChild(fig);
-      chartSlot.appendChild(el("p", { class: "story" }, storyNodes(m)));
+      chartSlot.appendChild(el("p", { class: "story", "aria-live": "polite", "aria-atomic": "true" }, storyNodes(m)));
+      chartSlot.appendChild(nestedBoxes(m));
       // example data
       const top = m.paths.slice().sort((a, b) => b.v - a.v).slice(0, 8);
       dataBox.appendChild(el("p", { class: "pick-note", text: "The most common combinations of categories, as a data user would receive them." }));
@@ -634,15 +705,16 @@
     // featured combination with its own questions
     const f = combosCfg.featured;
     if (f) {
-      const wrap = el("div", { class: "featured" }, [el("h2", { class: "section-label", text: "A combination we would like your view on" })]);
+      const wrap = el("div", { class: "featured" }, [el("h2", { class: "section-label", text: f.heading || combosCfg.featuredHeading || "A combination we are considering, and would like your feedback on" })]);
       const panel = el("div", { class: "panel" });
       const left = el("div", { class: "panel-left" });
-      const inner = el("div", { class: "left-inner" }, [el("h2", { text: f.title })]);
-      if (f.pills) inner.appendChild(el("div", { class: "combo-pills" }, f.pills.flatMap((p, i) => [i ? el("span", { class: "plus", "aria-hidden": "true", text: "+" }) : null, el("span", { class: "pill", text: p })]).filter(Boolean)));
-      if (f.summary) inner.appendChild(el("p", { class: "summary", text: f.summary }));
-      if (f.chart) {
+      const inner = el("div", { class: "left-inner" }, [f.title ? el("h2", { text: f.title }) : null]);
+      if (f.pills) inner.appendChild(el("div", { class: "combo-pills" }, f.pills.flatMap((p, i) => [i ? el("span", { class: "plus", "aria-hidden": "true", text: "×" }) : null, el("span", { class: "pill", text: p })]).filter(Boolean)));
+      if (f.summary) [].concat(f.summary).forEach(t => inner.appendChild(el("p", { class: "summary", text: t })));
+      if (f.chart && f.showChart !== false) {
         const fig = el("figure", { class: "chart" }, [el("figcaption", { class: "chart-title", text: f.chart.title })]);
-        fig.appendChild(el("div", { class: "sm-scroll" }, [C.smallMultiples({ label: f.chart.title, rows: f.chart.rows, panels: f.chart.panels.map(p => ({ name: p.name, values: p.values.map(v => v / 100) })) })]));
+        fig.appendChild(f.chart.type === "treemap" ? C.treemap({ label: f.chart.title, groups: f.chart.groups })
+          : el("div", { class: "sm-scroll" }, [C.smallMultiples({ label: f.chart.title, rows: f.chart.rows, panels: f.chart.panels.map(p => ({ name: p.name, values: p.values.map(v => v / 100) })) })]));
         fig.appendChild(el("p", { class: "chart-note", text: [NOTE, f.chart.note].filter(Boolean).join(" ") }));
         inner.appendChild(fig);
       }
@@ -660,14 +732,13 @@
 
   function setView(v, updateHash) {
     view = v;
-    $("#view_objectives").hidden = v !== "objectives";
     $("#view_single").hidden = v !== "single";
     $("#view_combos").hidden = v !== "combos";
-    [["vt_objectives", "objectives"], ["vt_single", "single"], ["vt_combos", "combos"]].forEach(([id, k]) => {
+    [["vt_single", "single"], ["vt_combos", "combos"]].forEach(([id, k]) => {
       const t = document.getElementById(id); t.setAttribute("aria-selected", k === v ? "true" : "false"); t.tabIndex = k === v ? 0 : -1;
     });
     fitBarLabels();
-    if (updateHash) { try { history.replaceState(null, "", v === "combos" ? "#combinations" : v === "objectives" ? "#objectives" : "#" + (activeIndicator.id || "")); } catch (e) {} scheduleSave(); }
+    if (updateHash) { try { history.replaceState(null, "", v === "combos" ? "#combinations" : "#" + (activeIndicator.id || "")); } catch (e) {} scheduleSave(); }
   }
 
   // ---------- page ----------
@@ -679,16 +750,10 @@
     if (s) s.textContent = page.intro || "";
     if (cfg.siteTitle) { document.title = cfg.siteTitle; const t = $("#siteTitle"); if (t) t.textContent = cfg.siteTitle; }
 
-    if (testMode) {
-      app.appendChild(el("div", { class: "alert alert-warning", role: "note" }, [el("div", null, [
-        el("p", { class: "at", text: "Test mode" }),
-        el("p", { class: "ab", text: "No endpoint URL is set in questions.js, so answers are not sent anywhere. Submitting shows the data that would be sent." })])]));
-    }
-
     const form = el("form", { id: "survey", novalidate: true });
     if (combosCfg) {
       const tabs = el("div", { class: "view-tabs", role: "tablist", "aria-label": "Survey sections" });
-      [["vt_objectives", "Objectives", "objectives", "view_objectives"], ["vt_single", "Single indicators", "single", "view_single"], ["vt_combos", "Indicator combinations", "combos", "view_combos"]].forEach(([id, label, k, ctl]) => {
+      [["vt_single", cfg.individualTabLabel || "Individual indicators", "single", "view_single"], ["vt_combos", cfg.combinedTabLabel || "Combined indicators", "combos", "view_combos"]].forEach(([id, label, k, ctl]) => {
         const b = el("button", { type: "button", role: "tab", id, "aria-controls": ctl, "aria-selected": "false", tabindex: "-1", text: label });
         b.addEventListener("click", () => setView(k, true));
         tabs.appendChild(b);
@@ -696,14 +761,13 @@
       tabs.addEventListener("keydown", e => {
         if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
         e.preventDefault();
-        const views = ["objectives", "single", "combos"];
+        const views = ["single", "combos"];
         const offset = e.key === "ArrowRight" ? 1 : -1;
         const nv = views[(views.indexOf(view) + offset + views.length) % views.length];
         setView(nv, true); document.getElementById("vt_" + nv).focus();
       });
       form.appendChild(tabs);
     }
-    form.appendChild(renderObjectivesView());
     form.appendChild(renderSingleView());
     const combosView = renderCombosView();
     form.appendChild(combosView);
@@ -712,7 +776,7 @@
       el("label", { for: "hp_website", text: "Leave this field empty" }),
       el("input", { type: "text", id: "hp_website", name: "website", tabindex: "-1", autocomplete: "off" })]));
     form.appendChild(el("div", { class: "submit-bar" }, [
-      el("p", { class: "submit-note", text: "Your answers are saved in this browser as you type, so you can come back later. They are only sent when you select “" + (cfg.submitLabel || "Submit") + "”." }),
+      el("p", { class: "submit-note", text: "Your answers are recorded anonymously and are not saved in this browser. If you need to pause, select “" + (cfg.submitLabel || "Submit") + "” first, because closing or reloading the page clears your answers." }),
       el("div", { class: "submit-actions" }, [el("button", { type: "submit", class: "btn btn-primary", id: "submitBtn", text: cfg.submitLabel || "Submit" })]),
       el("p", { class: "form-error", id: "formError", role: "alert" })]));
     form.addEventListener("input", onInput);
@@ -730,9 +794,8 @@
     if (draft) restoreDraft(draft);
     if (combosView._redraw) combosView._redraw();
     refresh();
-    let v0 = draft && ["objectives", "single", "combos"].includes(draft.view) ? draft.view : "objectives";
+    let v0 = draft && ["single", "combos"].includes(draft.view) ? draft.view : "single";
     if (hash === "combinations") v0 = "combos";
-    else if (hash === "objectives") v0 = "objectives";
     else if (ids.includes(hash)) v0 = "single";
     if (combosCfg) setView(v0, false);
   }
@@ -877,7 +940,6 @@
     if (!$("#survey")) return;
     const hash = decodeURIComponent((location.hash || "").slice(1));
     if (hash === "combinations" && combosCfg) setView("combos", false);
-    else if (hash === "objectives") setView("objectives", false);
     else if (page.indicators.some(x => x.id === hash)) { if (combosCfg) setView("single", false); selectIndicator(hash, false); }
   });
 })();

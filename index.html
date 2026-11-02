@@ -13,7 +13,54 @@
 <div id="page">
   <a class="skip" href="#main">Skip to the survey</a>
 
-  <main id="main" class="wrap">
+  <!-- Scrolling introduction. Without JavaScript the four slides simply appear one after another. -->
+  <section class="scrolly" id="story" aria-label="About this consultation">
+    <div class="story-stage">
+      <div class="slide" data-slide="0">
+        <h1 class="story-text">We want to measure <mark class="hl hl-a">AI adoption</mark> and <mark class="hl hl-b" data-share="char">characteristics of AI use</mark> across the world by combining data from multiple frontier AI labs.</h1>
+      </div>
+
+      <div class="slide" data-slide="1">
+        <p class="story-text"><mark class="hl hl-b" data-share="char">Characteristics of AI use</mark> can be measured by classifying user–chatbot conversations according to a defined set of <mark class="hl hl-c">indicators</mark>.</p>
+        <p class="story-eg">For example: the main work activity performed in the chat.</p>
+      </div>
+
+      <div class="slide" data-slide="2">
+        <p class="story-text"><mark class="hl hl-c">Indicators</mark>, isolated or in combination with each other, may help answer different <mark class="hl hl-a">research questions</mark>, such as:</p>
+        <div class="research-qs">
+          <p class="callout q q-c research-q">Is AI being used to analyse data or information in Rwanda?</p>
+          <p class="callout q q-c research-q">Are workers using AI for work or for personal purposes?</p>
+        </div>
+      </div>
+
+      <div class="slide" data-slide="3">
+        <p class="story-text">We want your input on <mark class="hl hl-c" id="w-which">which indicators</mark> are most useful to measure, and what is the best <mark class="hl hl-a" id="w-how">way to measure them</mark>.</p>
+        <div class="callouts near">
+          <p class="callout chip hl-a" data-from="w-how" data-align="word">Taxonomy</p>
+        </div>
+      </div>
+
+      <div class="slide" data-slide="4">
+        <p class="story-text">For each indicator, review the definition, evaluate its relevance to your work, and share concrete examples of how it may be useful to you. This will help us request these data from the frontier AI labs (Google, Microsoft, Anthropic and OpenAI).</p>
+        <p class="story-scope"><b>Scope:</b> our current analytical framework focuses specifically on consumer chat data from generative AI platforms.</p>
+        <a class="btn btn-primary story-start" href="#main">Start the survey</a>
+      </div>
+
+      <svg class="story-arrows" aria-hidden="true"></svg>
+      <ol class="story-dots" aria-hidden="true"><li></li><li></li><li></li><li></li><li></li></ol>
+      <p class="story-cue" aria-hidden="true">Scroll</p>
+    </div>
+    <div class="story-steps" aria-hidden="true">
+      <div class="step" data-step="0"></div>
+      <div class="step" data-step="1"></div>
+      <div class="step" data-step="2"></div>
+      <div class="step" data-step="3"></div>
+      <div class="step" data-step="4"></div>
+    </div>
+  </section>
+
+
+  <main id="main" class="wrap" tabindex="-1">
     <div id="app">
       <noscript>This survey needs JavaScript enabled.</noscript>
     </div>
@@ -31,6 +78,7 @@
   </footer>
 </div>
 
+<script src="story.js"></script>
 <script src="questions.js"></script>
 <script src="charts.js"></script>
 <script src="survey.js"></script>

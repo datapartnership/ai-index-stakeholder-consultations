@@ -8,14 +8,16 @@
                  While it is left as the placeholder, the page runs in TEST MODE:
                  nothing is sent, and the data that *would* be sent is shown on screen.
 
-  The page has three tabs:
-    Objectives              – an introduction to the initiative and consultation.
-    Single indicators       – `pages[0]`: a row of indicator buttons; each opens a split screen
+  The page opens with a short scrolling introduction (in index.html), then two tabs:
+    Individual indicators   – `pages[0]`: a row of indicator buttons; each opens a split screen
                               (LEFT = what the data would look like, RIGHT = questions).
-    Indicator combinations  – `combinations`: pick up to four indicators to see a Sankey chart,
+    Combined indicators     – `combinations`: pick up to four indicators to see a Sankey chart,
                               then rank the combinations you need; plus a featured combination.
 
   THE LEFT SIDE OF AN INDICATOR (`show`) – every part is optional, shown in this order:
+    what:     "What the indicator measures"            (shown as  What: …)
+    how:      "The taxonomy or method used"            (shown as  How: …)
+    howList:  [ { term, text } ]                       definitions shown under How
     summary:  "One sentence saying what the indicator measures"
     lead:     "Sentence introducing the example"
     explorer: { data: "data/onet_activities.json", tasks: "data/soc_tasks.json" }   // O*NET donut explorer
@@ -55,8 +57,8 @@ window.SURVEY_CONFIG = {
         "Answer as many indicators as are relevant to your work.",
 
       commonQuestions: [
-        { id: "relevant", type: "scale", label: "Is this a relevant indicator for policy?", options: ["Yes", "Somewhat", "No", "Not sure"] },
-        { id: "how", type: "textarea", label: "How is it relevant?", hint: "Please be as descriptive as possible." }
+        { id: "relevant", type: "scale", label: "Is this indicator relevant for policy, development investment, or research decisions?", options: ["Yes", "Somewhat", "No", "Not sure"] },
+        { id: "how", type: "textarea", label: "How is it relevant, and how would you use it?", hint: "Please provide a brief explanation or example." }
       ],
 
       indicators: [
@@ -64,23 +66,40 @@ window.SURVEY_CONFIG = {
           id: "user_characteristics",
           label: "User characteristics",
           title: "User characteristics",
-          show: null, // TODO: add an example measurement and description
-          questions: []
+          show: {
+            definition: "Characteristics of people who use Consumer Chat Generative AI in countries.",
+            taxonomy: "A starter list of characteristics for the shared survey:",
+            pillGroups: [
+              { sets: [{ pills: ["Age", "Level of education", "Urban or rural", "Gender", "User occupation", "Income", "Seniority and experience"] }] }
+            ],
+            example: { note: "An example will be added once the survey questions are agreed." }
+          },
+          skipCommon: ["relevant"],
+          questions: [
+            { id: "top_priority", type: "multiple", max: 3, label: "Which of these is highest priority for you? (Choose up to 3)",
+              options: ["Age", "Level of education", "Urban or rural", "Gender", "User occupation", "Income", "Seniority and experience"] }
+          ]
         },
         {
           id: "use_case",
-          label: "Use case (work, education, personal use)",
-          title: "Use case classification (work / non-work)",
+          label: "Use case",
+          title: "Use case",
           show: {
-            summary: "This indicator measures the share of messages across AI platforms used for work, personal purposes, or education.",
-            lead: "The use case indicator would allow for measurements such as:",
-            chart: {
-              title: "Share of messages by use case, Country A",
-              unit: "%",
-              bars: [ { label: "Work", value: 46 }, { label: "Personal use", value: 38 }, { label: "Education", value: 16 } ]
-            },
-            heading: "Definition of work",
-            text: [ "Work is defined as ‘work done for pay or profit, including self-employment and unpaid work in a family business’." ]
+            definition: "Whether a chat was used in the context of work, education or personal use.",
+            definitionList: [
+              { term: "Work", text: "Paid employment, self-employment, or running a business; work done for an employer, a client, or for income; training the employer requires." },
+              { term: "Education", text: "Coursework, studying, exams, or training in a program the user is enrolled in." },
+              { term: "Personal use", text: "Household, family, health, finances, hobbies, and leisure; the user’s own job search; and self-directed learning." }
+            ],
+            taxonomy: "Work, personal use, education.",
+            example: {
+              chart: {
+                type: "split",
+                title: "Share of consumer chat AI messages by use case, Argentina, 2027 Q1",
+                noteOverride: "Illustrative figures. Not real data for Argentina.",
+                parts: [ { name: "Work", value: 38 }, { name: "Personal use", value: 48 }, { name: "Education", value: 14 } ]
+              }
+            }
           },
           questions: [
             { id: "work_definition", type: "textarea", label: "Does this definition of work cover all forms of work in LMICs?" },
@@ -89,19 +108,27 @@ window.SURVEY_CONFIG = {
         },
         {
           id: "work_activities",
-          label: "Work activities",
-          title: "Work activities",
+          label: "Work Activity",
+          title: "Work Activity",
           show: {
-            // The counts, donuts, rankings and search come from these files,
-            // built from the O*NET database with tools/build_onet_data.py.
-            explorer: { data: "data/onet_activities.json", tasks: "data/soc_tasks.json" },
-            summary: "This indicator measures the types of work activities for which people use AI, using the O*NET work activity classification maintained by the U.S. Department of Labor."
+            definition: "The main work activity that the conversation is used for.",
+            taxonomy: "The O*NET taxonomy maintained by the U.S. Department of Labor. There are four options for taxonomy:",
+            taxonomyBullets: [
+              { term: "Option 1: General Work Activities.", text: "Highest level, with 41 items." },
+              { term: "Option 2: Intermediate Work Activities.", text: "332 items, which map to the GWAs." },
+              { term: "Option 3: Detailed Work Activities (DWAs)." },
+              { term: "Option 4: Tasks.", text: "19,000+ items created from US occupations and a survey of US workers." }
+            ],
+            // The donuts, rankings and search come from data files built with tools/build_onet_data.py.
+            example: { explorer: { data: "data/onet_activities.json", tasks: "data/soc_tasks.json" } }
           },
+          skipCommon: ["how"],
           questions: [
-            { id: "onet_level", type: "scale", label: "Which level is most useful to you?", options: ["GWA", "IWA", "DWA", "Not sure"] },
-            { id: "onet_level_why", type: "textarea", label: "Why is that level the most useful?", showIf: { question: "onet_level", answered: true } },
-            { id: "activity_vs_task", type: "textarea", label: "Would your research benefit from activity-based AI exposure indicators, compared to task-based AI exposure indicators from O*NET?" },
-            { id: "onet_lmic", type: "textarea", label: "Can you study AI exposure in LMICs using activities from O*NET?" }
+            { id: "activity_vs_task", type: "single", label: "Which of the 4 levels is best suited to study impact of AI on work activities?",
+              options: ["Option 1: General Work Activities", "Option 2: Intermediate Work Activities", "Option 3: Detailed Work Activities", "Option 4: Tasks", "Not sure"] },
+            { id: "activity_vs_task_why", type: "textarea", label: "Why?", hint: "Optional.", showIf: { question: "activity_vs_task", answered: true } },
+            { id: "onet_lmic", type: "textarea", label: "Can you study AI exposure in LMICs using activities from O*NET?" },
+            { id: "how", type: "textarea", label: "How is it relevant, and how would you use it?", hint: "Please provide a brief explanation or example." }
           ]
         },
         {
@@ -109,47 +136,70 @@ window.SURVEY_CONFIG = {
           label: "Skills",
           title: "Skills",
           show: {
-            summary: "Do you need to know the skills that the AI uses, or the skills the person is asking the AI to use?",
-            lead: "There are several ways to group skills:",
+            definition: "Skill used by AI to create the output in this chat. This can be a one to many mapping between a chat and skills.",
             pillGroups: [
-              {
-                title: "O*NET skills taxonomy",
-                note: "A taxonomy of 35 skills, grouped into these high-level categories.",
-                sets: [
-                  { label: "Basic skills", pills: ["Content skills", "Process skills"] },
-                  { label: "Cross-functional skills", pills: ["Social skills", "Complex problem solving skills", "Technical skills", "Systems skills", "Resource management skills"] }
-                ]
-              },
-              {
-                title: "LinkedIn skills categories",
-                note: "A high-level categorization of skills. It is not a taxonomy.",
-                sets: [{ pills: ["Tech skills", "Disruptive tech skills", "Green skills", "Soft skills", "Business skills"] }]
-              },
-              {
-                title: "ILO core skills",
-                note: "The skill groups in the ILO Global Framework on Core Skills. The ILO also maintains ISCO.",
-                sets: [{ pills: ["Social and emotional skills", "Cognitive and metacognitive skills", "Basic digital skills", "Basic skills for green jobs"] }]
-              }
-            ]
+              { title: "Option 1: ILO core skills", note: "The skill groups in the ILO Global Framework on Core Skills.",
+                sets: [{ pills: ["Cognitive and metacognitive skills", "Basic digital skills", "Social and emotional skills", "Basic skills for green jobs"] }] },
+              { title: "Option 2: O*NET skills taxonomy", note: "A taxonomy of 35 skills, grouped into these high-level categories.",
+                sets: [ { label: "Basic skills", pills: ["Content skills", "Process skills"] },
+                        { label: "Cross-functional skills", pills: ["Social skills", "Complex problem solving skills", "Technical skills", "Systems skills", "Resource management skills"] } ] },
+              { title: "Option 3: LinkedIn skills categories", note: "A high-level categorization of skills. It is not a taxonomy.",
+                sets: [{ pills: ["Tech skills", "Soft skills", "Business skills", "Disruptive tech skills", "Green skills"] }] }
+            ],
+            example: { note: "An example will be added once a skills classification is chosen." }
           },
-          questionsBefore: [
-            { id: "need_if_activities", type: "scale", label: "Do you require skills mapping if an activity mapping already exists?", options: ["Yes", "No", "Not sure"] }
-          ],
           questions: [
-            { id: "skills_focus", type: "single", label: "Do you need to know the skills that the AI uses, or the skills the person is asking the AI to use?",
-              options: ["Skills the AI uses", "Skills the person is asking the AI to use", "Both", "Not sure"] },
-            { id: "skills_framework", type: "single", label: "Which way of grouping skills is better for your work?",
-              options: ["O*NET skills taxonomy", "LinkedIn skills categories", "ILO core skills", "None of these"], allowOther: true, otherLabel: "Another framework (please name it)" },
+            { id: "skills_focus", type: "single", label: "Which is more important: the skills that the generative AI uses, or the skills the person is asking the generative AI to use?",
+              options: ["Skills the AI uses", "Skills the person is asking the AI to use", "Both equally", "Not sure"] },
+            { id: "need_if_activities", type: "scale", label: "Do you require skills mapping if an activity mapping already exists?", options: ["Yes", "No", "Not sure"] },
+            { id: "skills_framework", type: "single", label: "Which option is better suited to classify chats by this indicator?",
+              options: ["Option 1: ILO core skills", "Option 2: O*NET skills taxonomy", "Option 3: LinkedIn skills categories", "None of these"], allowOther: true, otherLabel: "Another framework (please name it)" },
             { id: "skills_framework_why", type: "textarea", label: "Why is that one better for your work?", showIf: { question: "skills_framework", answered: true } }
           ]
         },
         {
           id: "occupational_content",
-          label: "Occupational content",
-          title: "Occupational field taxonomy and classification",
+          label: "Occupational Content",
+          title: "Occupational Content",
           show: {
-            summary: "This indicator measures which types of occupation involve the requests asked and the outputs created within a chat.",
-            text: [ "Every chat will be mapped to a 16-item list of occupational fields, derived by aggregating the ISCO occupation list. This lets users identify which occupational field a chat most closely resembles." ]
+            definition: "The occupational field a conversation or message relates to. This is not the user’s occupation: a lawyer and a person looking for legal advice would both be classified under ‘Legal’.",
+            definitionHighlight: "This is not the user’s occupation:",
+            taxonomy: "16 categories created by aggregating ISCO occupations.",
+            taxonomyTable: {
+              columns: ["#", "Field", "ISCO-08 groups", "The work, and in brackets the workers who do it"],
+              rows: [
+                ["1", "Management", "1", "Planning, directing, and coordinating an organization or a team; budgets; hiring (chief executives; department and project managers; owner-managers)"],
+                ["2", "Science and engineering", "21; 31", "Research, design, and calculation in the sciences, mathematics and statistics, engineering, and architecture; product and graphic design (scientists, statisticians, engineers, architects, designers; technicians)"],
+                ["3", "Health", "22; 32", "Diagnosing, treating, and caring for people and animals; medicines, diet, rehabilitation (doctors, nurses, veterinarians, dentists, pharmacists; medical technicians, nursing associates)"],
+                ["4", "Teaching", "23", "Teaching learners at any level; lessons, teaching material, grading, curricula (teachers from early childhood to university; trainers)"],
+                ["5", "Business and administration", "24; 33", "Accounting, finance, and tax; consulting and policy analysis; human resources; marketing, public relations, and sales (accountants, financial analysts, consultants, human resources and marketing specialists; brokers, buyers)"],
+                ["6", "Information and communications technology", "25; 35", "Software and websites; databases, systems, and networks; user support (developers, programmers, systems and database administrators; ICT technicians)"],
+                ["7", "Legal", "261; 3411", "Law, contracts, rights, disputes, legal documents (lawyers, judges, notaries; paralegals)"],
+                ["8", "Social science, counselling, and religion", "262–263; 3412–3413; 342", "Economics, history, psychology, politics; counselling and social work; religion; libraries and archives; sports coaching (economists, psychologists, social workers, clergy, librarians; coaches and fitness instructors)"],
+                ["9", "Writing, translation, and the arts", "264–265; 343", "Fiction, journalism, and other texts for publication; translation; visual art, music, film, photography (authors, journalists, translators; artists, musicians, photographers)"],
+                ["10", "Clerical support", "4", "Records, forms, scheduling, correspondence, data entry, bookkeeping entries (secretaries, office clerks, receptionists, payroll clerks)"],
+                ["11", "Service and sales", "5", "Serving customers and selling; cooking; personal care and childcare; protection (cooks, waiters, shop assistants, hairdressers, childcare workers, security staff)"],
+                ["12", "Skilled agricultural, forestry, and fishery", "6", "Growing crops, raising animals, forestry, fishing (farmers, gardeners, foresters, fishers)"],
+                ["13", "Craft and related trades", "7", "Building, installing, and repairing structures, machines, and equipment (builders, electricians, mechanics, plumbers, carpenters)"],
+                ["14", "Plant and machine operations and assembly", "8", "Operating machinery and vehicles; assembly; driving (machine operators, assemblers, drivers)"],
+                ["15", "Elementary tasks", "9", "Routine manual work: cleaning, laboring, kitchen help, delivery (cleaners, laborers, kitchen helpers)"],
+                ["16", "Armed forces", "0", "Military service (officers and other ranks)"],
+                ["R", "No occupational content", "–", "No task, or content that draws on no occupation’s expertise"],
+                ["X, D", "Cannot be read; declined", "–", "An empty, garbled, or cut-off message; or a readable message whose content the classifier does not engage with"]
+              ]
+            },
+            example: {
+              chart: {
+                title: "Share of messages by occupational field, Country A",
+                layout: "stacked",
+                unit: "%",
+                bars: [
+                  { label: "Information and communications technology", value: 21 }, { label: "Business and administration", value: 17 },
+                  { label: "Teaching", value: 12 }, { label: "Writing, translation, and the arts", value: 11 }, { label: "Health", value: 8 },
+                  { label: "All other fields", value: 31 }
+                ]
+              }
+            }
           },
           questions: [
             { id: "name_understood", type: "textarea", label: "Is ‘occupational field’ an indicator name you understand to mean ‘topics related to this occupation’?" },
@@ -158,58 +208,118 @@ window.SURVEY_CONFIG = {
           ]
         },
         {
-          id: "education_level",
-          label: "Level of education",
-          title: "Level of education",
+          id: "industry",
+          label: "Industry",
+          title: "Industry",
           show: {
-            summary: "This indicator measures the level of education needed for the requests and outputs in a chat, using the four ISCO-08 skill levels.",
-            lead: "The level of education indicator would allow for measurements such as:",
-            chart: {
-              title: "Share of messages by ISCO skill level, Country A",
-              unit: "%",
-              bars: [
-                { label: "Level 1: Primary", value: 14 },
-                { label: "Level 2: Secondary", value: 41 },
-                { label: "Level 3: Short-cycle tertiary", value: 27 },
-                { label: "Level 4: Bachelor's or higher", value: 18 }
+            definition: "This indicator measures the industry or sector that the chat relates to. It does not measure the occupational content. For example, a chat requesting ‘written documents pertaining to teaching’ can be from the ‘legal’ sector, the ‘health’ sector or ‘education’.",
+            taxonomy: "The 21 sections of the International Standard Industrial Classification of All Economic Activities (ISIC Rev. 4).",
+            taxonomyTable: {
+              columns: ["Section", "Description", "Divisions"],
+              rows: [
+                ["A", "Agriculture, forestry and fishing", "01–03"],
+                ["B", "Mining and quarrying", "05–09"],
+                ["C", "Manufacturing", "10–33"],
+                ["D", "Electricity, gas, steam and air conditioning supply", "35"],
+                ["E", "Water supply; sewerage, waste management and remediation activities", "36–39"],
+                ["F", "Construction", "41–43"],
+                ["G", "Wholesale and retail trade; repair of motor vehicles and motorcycles", "45–47"],
+                ["H", "Transportation and storage", "49–53"],
+                ["I", "Accommodation and food service activities", "55–56"],
+                ["J", "Information and communication", "58–63"],
+                ["K", "Financial and insurance activities", "64–66"],
+                ["L", "Real estate activities", "68"],
+                ["M", "Professional, scientific and technical activities", "69–75"],
+                ["N", "Administrative and support service activities", "77–82"],
+                ["O", "Public administration and defence; compulsory social security", "84"],
+                ["P", "Education", "85"],
+                ["Q", "Human health and social work activities", "86–88"],
+                ["R", "Arts, entertainment and recreation", "90–93"],
+                ["S", "Other service activities", "94–96"],
+                ["T", "Activities of households as employers; undifferentiated goods- and services-producing activities of households for own use", "97–98"],
+                ["U", "Activities of extraterritorial organizations and bodies", "99"]
               ]
             },
-            heading: "ISCO-08 skill levels",
-            text: [
-              "Level 1: primary education. Simple and routine physical or manual tasks.",
-              "Level 2: lower or upper secondary education, and some post-secondary non-tertiary courses.",
-              "Level 3: short-cycle tertiary education, typically one to three years after secondary school.",
-              "Level 4: a bachelor's degree or higher."
-            ]
+            example: {
+              chart: {
+                title: "Share of messages by industry group, Country A",
+                layout: "stacked",
+                unit: "%",
+                bars: [
+                  { label: "Information and communication", value: 21 }, { label: "Education", value: 17 },
+                  { label: "Real estate, professional, scientific, technical and administrative", value: 14 },
+                  { label: "Human health and social work", value: 10 }, { label: "Trade, transport, accommodation and food", value: 8 },
+                  { label: "All other groups", value: 30 }
+                ]
+              }
+            }
           },
           questions: []
         },
         {
-          id: "industry",
-          label: "Industry classification",
-          title: "Industry classification",
+          id: "expertise",
+          label: "Proficiency",
+          title: "Proficiency",
           show: {
-            summary: "Which industry do the contents of this chat best relate to? The outputs will be mapped to ISIC Rev. 4 sectors.",
-            pillGroups: [{
-              title: "ISIC Rev. 4 sections",
-              note: "The 21 top-level sections of the International Standard Industrial Classification.",
-              sets: [{
-                pills: [
-                  { code: "A", label: "Agriculture, forestry and fishing" }, { code: "B", label: "Mining and quarrying" },
-                  { code: "C", label: "Manufacturing" }, { code: "D", label: "Electricity, gas, steam and air conditioning supply" },
-                  { code: "E", label: "Water supply; sewerage, waste management and remediation activities" }, { code: "F", label: "Construction" },
-                  { code: "G", label: "Wholesale and retail trade; repair of motor vehicles and motorcycles" }, { code: "H", label: "Transportation and storage" },
-                  { code: "I", label: "Accommodation and food service activities" }, { code: "J", label: "Information and communication" },
-                  { code: "K", label: "Financial and insurance activities" }, { code: "L", label: "Real estate activities" },
-                  { code: "M", label: "Professional, scientific and technical activities" }, { code: "N", label: "Administrative and support service activities" },
-                  { code: "O", label: "Public administration and defence; compulsory social security" }, { code: "P", label: "Education" },
-                  { code: "Q", label: "Human health and social work activities" }, { code: "R", label: "Arts, entertainment and recreation" },
-                  { code: "S", label: "Other service activities" },
-                  { code: "T", label: "Activities of households as employers; undifferentiated goods- and services-producing activities of households for own use" },
-                  { code: "U", label: "Activities of extraterritorial organizations and bodies" }
-                ]
-              }]
-            }]
+            definition: "The proficiency, expertise or level of education associated with a message or conversation: the cognitive and technical complexity needed to write the prompt and to understand and use the AI’s output.",
+            taxonomy: "Several ways of grouping levels are under discussion:",
+            pillGroups: [
+              { title: "Option 1: Domain expertise", note: "Low, medium, or high. Classes with sharp boundaries are easier to classify reliably, and avoid comparing years of education across countries.",
+                sets: [{ pills: ["Low", "Medium", "High"] }] },
+              { title: "Option 2: Education level (ILO, aggregate ISCED-97)", note: "An international standard for education levels. Very helpful for policy advice.",
+                sets: [{ pills: ["Less than basic", "Basic", "Intermediate", "Advanced", "Level not stated"] }] }
+            ],
+            example: {
+              chart: {
+                title: "Share of messages by domain expertise needed, Country A",
+                unit: "%",
+                bars: [ { label: "Low", value: 37 }, { label: "Medium", value: 44 }, { label: "High", value: 19 } ]
+              }
+            }
+          },
+          questions: [
+            { id: "best_option", type: "single", label: "Which option is better suited to classify chats by this indicator?",
+              options: ["Option 1: Domain expertise", "Option 2: Education level", "None of these", "Not sure"] }
+          ]
+        },
+        {
+          id: "time_gains",
+          label: "Time gains",
+          title: "Time gains",
+          show: {
+            definition: "The time saved by using generative AI for an activity: the time a competent person (not a beginner or an expert) would need without AI, minus the time spent with AI.",
+            taxonomy: "Broad, roughly logarithmic bands, which reduce classification errors:",
+            taxonomyList: [
+              { term: "Less than 5 minutes", text: "A few minutes of work." },
+              { term: "5 minutes to 1 hour", text: "Between a few minutes and an hour’s work." },
+              { term: "1 to 8 hours", text: "Between an hour and a day’s work." },
+              { term: "More than 8 hours", text: "More than a day’s work; can be split further." }
+            ],
+            example: {
+              chart: {
+                title: "Share of messages by time saved, Country A",
+                unit: "%",
+                bars: [ { label: "Less than 5 minutes", value: 41 }, { label: "5 minutes to 1 hour", value: 38 }, { label: "1 to 8 hours", value: 17 }, { label: "More than 8 hours", value: 4 } ]
+              }
+            }
+          },
+          questions: []
+        },
+        {
+          id: "language",
+          label: "Language of interaction",
+          title: "Language of interaction",
+          show: {
+            definition: "The share of messages in each of a country’s main languages, per quarter. This shows adoption against the availability of good models in national languages, and could guide investment in low-resource language data. It is recorded, not inferred.",
+            taxonomy: "For every country, the languages spoken by at least 10% of the population, as listed by the Development Data Partnership.",
+            example: {
+              chart: {
+                type: "split",
+                title: "Share of messages by language, Kenya, 2027 Q1",
+                noteOverride: "Illustrative figures. Not real data for Kenya.",
+                parts: [ { name: "English", value: 61 }, { name: "Kiswahili", value: 33 }, { name: "Other languages", value: 6 } ]
+              }
+            }
           },
           questions: []
         },
@@ -217,71 +327,130 @@ window.SURVEY_CONFIG = {
           id: "automation",
           label: "Automation vs augmentation",
           title: "Automation / augmentation",
-          show: { text: [ "This indicator measures whether the task given to generative AI automates a person’s work or augments it." ] },
+          show: {
+            definition: "Whether AI completes a task on its own (automation) or supports a person who remains in charge of it (augmentation). For labor-market specialists this is replacement versus augmentation of tasks; in education, learning versus offloading; in digital development, which tasks are handed over to AI.",
+            taxonomy: "Two options are under discussion: a new classification combining the frameworks the labs already use (for example, directive and feedback-loop chats as automation; task iteration, learning and validation as augmentation), or a simpler asking / doing / expressing framework.",
+            example: {
+              chart: {
+                type: "split",
+                title: "Share of messages that automate or augment work, Country A",
+                parts: [ { name: "Augmentation", value: 54 }, { name: "Automation", value: 46 } ]
+              }
+            }
+          },
           questions: [
+            { id: "best_option", type: "single", label: "Which option is better suited to classify chats by this indicator?",
+              options: ["A new classification combining the labs’ frameworks", "An asking / doing / expressing framework", "None of these", "Not sure"] },
             { id: "own_definition", type: "textarea", label: "How would you define this indicator if you could choose the categories behind it?" }
           ]
+        },
+        {
+          id: "time_of_use",
+          label: "Time of use",
+          title: "Time of use",
+          show: {
+            definition: "When consumer chat is used: time of day, day of week and day of month. This is recorded, not inferred. Research shows nighttime use leans towards philosophical discussion and daytime use towards work.",
+            taxonomy: "Each lab provides the distribution of its chats across hours of the day, days of the week and days of the month, aggregated separately for a typical weekday and a typical weekend.",
+            example: {
+              chart: {
+                title: "Share of weekday messages by time of day, Country A",
+                unit: "%",
+                bars: [
+                  { label: "00:00–04:00", value: 4 }, { label: "04:00–08:00", value: 7 }, { label: "08:00–12:00", value: 27 },
+                  { label: "12:00–16:00", value: 28 }, { label: "16:00–20:00", value: 20 }, { label: "20:00–24:00", value: 14 }
+                ]
+              }
+            }
+          },
+          questions: []
         }
       ]
     }
   ],
 
-  /* ---------- INDICATOR COMBINATIONS TAB ---------- */
+  /* ---------- COMBINED INDICATORS TAB ---------- */
   combinations: {
     title: "Build an indicator combination",
-    intro: "Pick up to four indicators, in the order you want to break messages down. The chart shows how messages would flow across them.",
+    intro: "Pick up to four indicators, in the order you want to break messages down. The sentence below shows the share of messages in each selected category.",
     max: 4,
     maxPriorities: 5,
+    showExampleData: false,   // true shows a "See example data" table under the summary
 
-    // Categories used in the Sankey chart (kept short so the chart stays readable).
-    // `phrase` builds the example sentence: {x} is the category name.
+    // `phrase` builds the example sentence: {x} is the selected category name.
     indicators: [
-      { id: "user_characteristics", label: "User characteristics", disabled: true,
-        disabledNote: "Available once the user characteristics categories are defined." },
       { id: "use_case", label: "Use case", cats: ["Work", "Personal use", "Education"], weights: [46, 38, 16],
         phrase: "are {x}", lower: true },
-      { id: "work_activities", label: "Work activities",
+      { id: "work_activities", label: "Work Activity",
         cats: ["Information Input", "Mental Processes", "Work Output", "Interacting with Others"], weights: [16, 34, 22, 28],
         phrase: "involve {x} activities", lower: true, note: "Work activities shows the four O*NET GWA categories." },
       { id: "skills", label: "Skills",
         cats: ["Tech skills", "Disruptive tech skills", "Soft skills", "Business skills", "Green skills"], weights: [30, 12, 26, 24, 8],
         phrase: "use {x}", lower: true, note: "Skills shows the LinkedIn skills categories." },
-      { id: "occupational_content", label: "Occupational content",
-        cats: ["Professionals", "Technicians and associate professionals", "Managers", "Clerical support workers", "Other occupations"], weights: [34, 18, 14, 12, 22],
-        phrase: "relate to work done by {x}", lower: true, note: "Occupational content shows ISCO-08 major groups as a stand-in for the 16 occupational fields." },
-      { id: "education_level", label: "Level of education", cats: ["Level 4", "Level 3", "Level 2", "Level 1"], weights: [18, 27, 41, 14],
-        phrase: "need ISCO {x}" },
-      { id: "industry", label: "Industry classification", short: "Industry",
-        cats: ["Education (P)", "Information and communication (J)", "Health (Q)", "Finance (K)", "Other industries"], weights: [20, 19, 15, 11, 35],
-        phrase: "relate to the {x} industry", lower: true, stripCode: true, note: "Industry shows the top four ISIC sections plus all others." },
+      { id: "occupational_content", label: "Occupational Content",
+        cats: ["Teaching", "Business and administration", "Health", "Information and communications technology", "Other fields"], weights: [30, 15, 12, 10, 33],
+        phrase: "relate to {x} work", lower: true, note: "Occupational content shows the four largest of the 16 fields plus all others." },
+      { id: "industry", label: "Industry",
+        cats: ["Human health and social work", "Education", "Financial and insurance activities", "Information and communication", "Other industries"], weights: [30, 14, 10, 9, 37],
+        phrase: "relate to {x}", lower: true, note: "Industry shows the four largest industry groups plus all others." },
+      { id: "expertise", label: "Proficiency", cats: ["High", "Medium", "Low"], weights: [19, 44, 37],
+        phrase: "need {x} domain expertise", lower: true, note: "Proficiency uses the low / medium / high domain expertise option." },
+      { id: "time_gains", label: "Time gains", cats: ["Less than 5 minutes", "5 minutes to 1 hour", "1 to 8 hours", "More than 8 hours"], weights: [41, 38, 17, 4],
+        phrase: "save {x}", words: { "Less than 5 minutes": "less than 5 minutes", "5 minutes to 1 hour": "between 5 minutes and an hour", "1 to 8 hours": "between 1 and 8 hours", "More than 8 hours": "more than 8 hours" } },
+      { id: "language", label: "Language of interaction", short: "Language", cats: ["Main national language", "Second national language", "Other languages"], weights: [61, 33, 6],
+        phrase: "are in the {x}", lower: true, note: "Language shows a country's two main languages plus all others." },
       { id: "automation", label: "Automation vs augmentation", cats: ["Augmentation", "Automation"], weights: [54, 46],
-        phrase: "{x} the person’s work", words: { Augmentation: "augment", Automation: "automate" } }
+        phrase: "{x} work", words: { Augmentation: "augment", Automation: "automate" } },
+      { id: "time_of_use", label: "Time of use", cats: ["Weekday working hours", "Weekday evenings", "Weekends", "Late night"], weights: [44, 24, 22, 10],
+        phrase: "are sent {x}", words: { "Weekday working hours": "during weekday working hours", "Weekday evenings": "on weekday evenings", "Weekends": "at weekends", "Late night": "late at night" },
+        note: "Time of use categories are placeholders." }
     ],
 
     builderQuestions: [
-      { id: "useful", type: "scale", label: "Is this combination useful to you?", options: ["Yes", "Somewhat", "No", "Not sure"] },
       { id: "use_for", type: "textarea", label: "Why is this combination a priority for your work?" }
     ],
 
     // A featured combination with its own chart and questions, shown below the builder.
     featured: {
       id: "combo_uc_wa",
-      title: "Use case and work activities",
-      pills: ["Use case", "Work activities"],
-      summary: "This indicator combination measures work activities among messages labeled as work, personal use, or education.",
+      heading: "Filter Work Chats",
+      showChart: true,          // false hides the chart
+      summary: [
+        "After classifying chats as work or non-work, we can classify ALL chats by O*NET Work Activities, or ONLY the work chats.",
+        "This means Personal Use & Educational Use will be measured by Work Activity taxonomies."
+      ],
       chart: {
-        title: "Share of messages by IWA within each use case, Country A",
-        note: "IWA titles are real O*NET examples.",
-        rows: [
-          "Read documents or materials to inform work processes.",
-          "Study details of artistic productions.",
-          "Design industrial systems or equipment.",
-          "Perform recruiting or hiring activities."
-        ],
-        panels: [
-          { name: "Work", values: [24, 6, 11, 9] },
-          { name: "Personal use", values: [12, 19, 3, 2] },
-          { name: "Education", values: [27, 8, 5, 1] }
+        type: "treemap",
+        title: "Example: Personal use messages by General Work Activity, Country A",
+        note: "Only GWAs from the Interacting with Others and Work Output categories are shown.",
+        groups: [
+          { name: "Interacting with Others", items: [
+            { name: "Providing Consultation and Advice to Others", value: 14.2 },
+            { name: "Interpreting the Meaning of Information for Others", value: 11.6 },
+            { name: "Establishing and Maintaining Interpersonal Relationships", value: 9.1 },
+            { name: "Assisting and Caring for Others", value: 7.4 },
+            { name: "Training and Teaching Others", value: 6.3 },
+            { name: "Communicating with People Outside the Organization", value: 4.2 },
+            { name: "Resolving Conflicts and Negotiating with Others", value: 3.1 },
+            { name: "Selling or Influencing Others", value: 2.4 },
+            { name: "Coaching and Developing Others", value: 2.0 },
+            { name: "Communicating with Supervisors, Peers, or Subordinates", value: 1.6 },
+            { name: "Performing Administrative Activities", value: 1.4 },
+            { name: "Performing for or Working Directly with the Public", value: 0.9 },
+            { name: "Monitoring and Controlling Resources", value: 0.8 },
+            { name: "Coordinating the Work and Activities of Others", value: 0.6 },
+            { name: "Developing and Building Teams", value: 0.3 },
+            { name: "Guiding, Directing, and Motivating Subordinates", value: 0.3 },
+            { name: "Staffing Organizational Units", value: 0.2 } ] },
+          { name: "Work Output", items: [
+            { name: "Working with Computers", value: 13.8 },
+            { name: "Documenting/Recording Information", value: 9.6 },
+            { name: "Performing General Physical Activities", value: 3.1 },
+            { name: "Handling and Moving Objects", value: 2.0 },
+            { name: "Operating Vehicles, Mechanized Devices, or Equipment", value: 1.6 },
+            { name: "Repairing and Maintaining Mechanical Equipment", value: 1.4 },
+            { name: "Repairing and Maintaining Electronic Equipment", value: 1.1 },
+            { name: "Drafting, Laying Out, and Specifying Technical Devices, Parts, and Equipment", value: 0.6 },
+            { name: "Controlling Machines and Processes", value: 0.4 } ] }
         ]
       },
       questions: [

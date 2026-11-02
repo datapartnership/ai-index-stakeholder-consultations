@@ -11,7 +11,7 @@
   The page opens with a short scrolling introduction (in index.html), then two tabs:
     Individual indicators   – `pages[0]`: a row of indicator buttons; each opens a split screen
                               (LEFT = what the data would look like, RIGHT = questions).
-    Combined indicators     – `combinations`: pick up to four indicators to see a Sankey chart,
+    Combined indicators     – `combinations`: pick any number of indicators (set `max` to cap it) to see the summary,
                               then rank the combinations you need; plus a featured combination.
 
   THE LEFT SIDE OF AN INDICATOR (`show`) – every part is optional, shown in this order:
@@ -31,13 +31,17 @@
                   "multiple" (checkboxes), "textarea", "text", "email", "number".
   Optional: hint, required: true, showIf: { question: "id", equals: "No" } (or answered: true).
 
-  IDS: answers are saved as <indicator id>__<question id>. Don't change ids once responses arrive.
+  IDS AND CODES: every indicator has a short `code` (e.g. ACT) and every question a `code` (e.g. Q1).
+  Answers are sent under <indicator code>_<question code>, e.g. ACT_Q1; "Other" text adds _OTH.
+  The backend relies on these codes (see README.md): never reuse or change a code once responses arrive.
+  Internal `id`s are used for links and saved drafts only.
   LINK TO ONE INDICATOR: add #<indicator id> to the address, e.g. .../#work_activities
   LINK TO THE COMBINATIONS TAB: .../#combinations
 */
 
 window.SURVEY_CONFIG = {
   siteTitle: "AI Index stakeholder consultation",
+  surveyVersion: "2026-11",   // sent with every response; bump when questions change
 
   endpointUrl: "PASTE_YOUR_ENDPOINT_URL_HERE",
 
@@ -57,13 +61,14 @@ window.SURVEY_CONFIG = {
         "Answer as many indicators as are relevant to your work.",
 
       commonQuestions: [
-        { id: "relevant", type: "scale", label: "Is this indicator relevant for policy, development investment, or research decisions?", options: ["Yes", "Somewhat", "No", "Not sure"] },
-        { id: "how", type: "textarea", label: "How is it relevant, and how would you use it?", hint: "Please provide a brief explanation or example." }
+        { id: "relevant", code: "REL", type: "scale", label: "Is this indicator relevant for policy, development investment, or research decisions?", options: ["Yes", "Somewhat", "No", "Not sure"] },
+        { id: "how", code: "HOW", type: "textarea", label: "How is it relevant, and how would you use it?", hint: "Please provide a brief explanation or example." }
       ],
 
       indicators: [
         {
           id: "user_characteristics",
+          code: "CHR",
           label: "User Characteristics",
           title: "User Characteristics",
           show: {
@@ -76,12 +81,13 @@ window.SURVEY_CONFIG = {
           },
           skipCommon: ["relevant"],
           questions: [
-            { id: "top_priority", type: "multiple", max: 3, label: "Which of these is highest priority for you? (Choose up to 3)",
+            { id: "top_priority", code: "Q1", type: "multiple", max: 3, label: "Which of these is highest priority for you? (Choose up to 3)",
               options: ["Age", "Level of education", "Urban or rural", "Gender", "User occupation", "Income", "Seniority and experience"] }
           ]
         },
         {
           id: "use_case",
+          code: "USE",
           label: "Use Case",
           title: "Use Case",
           show: {
@@ -102,12 +108,13 @@ window.SURVEY_CONFIG = {
             }
           },
           questions: [
-            { id: "work_definition", type: "textarea", label: "Does this definition of work cover all forms of work in LMICs?" },
-            { id: "edu_personal_categories", type: "textarea", label: "Do you have suggestions on activity categorizations for education and personal use that translate to LMICs?" }
+            { id: "work_definition", code: "Q1", type: "textarea", label: "Does this definition of work cover all forms of work in LMICs?" },
+            { id: "edu_personal_categories", code: "Q2", type: "textarea", label: "Do you have suggestions on activity categorizations for education and personal use that translate to LMICs?" }
           ]
         },
         {
           id: "work_activities",
+          code: "ACT",
           label: "Work Activity",
           title: "Work Activity",
           show: {
@@ -128,24 +135,25 @@ window.SURVEY_CONFIG = {
           },
           skipCommon: ["how"],
           questions: [
-            { id: "taxonomy_option", type: "single", label: "Which taxonomy option do you think is more suited?",
+            { id: "taxonomy_option", code: "Q1", type: "single", label: "Which taxonomy option do you think is more suited?",
               options: ["Option 1", "Option 2", "Not sure"] },
-            { id: "activity_vs_task", type: "single", label: "Which of the 4 levels would be most useful to study the activities AI is used for?",
+            { id: "activity_vs_task", code: "Q2", type: "single", label: "Which of the 4 levels would be most useful to study the activities AI is used for?",
               options: ["General Work Activities (GWAs)", "Intermediate Work Activities (IWAs)", "Detailed Work Activities (DWAs)", "Tasks", "Not sure"],
               showIf: { question: "taxonomy_option", equals: "Option 1" } },
-            { id: "time_use_survey", type: "textarea", label: "Which Time Use Survey is best suited to measure global chat data?",
+            { id: "time_use_survey", code: "Q3", type: "textarea", label: "Which Time Use Survey is best suited to measure global chat data?",
               showIf: { question: "taxonomy_option", equals: "Option 2" } },
-            { id: "education_onet", type: "scale", label: "Can education-related chats be measured using O*NET work activities?", options: ["Yes", "No", "Not sure"],
+            { id: "education_onet", code: "Q4", type: "scale", label: "Can education-related chats be measured using O*NET work activities?", options: ["Yes", "No", "Not sure"],
               showIf: { question: "taxonomy_option", equals: "Option 2" } },
-            { id: "work_level", type: "single", label: "Which O*NET level is best suited to classify work-related chats?",
+            { id: "work_level", code: "Q5", type: "single", label: "Which O*NET level is best suited to classify work-related chats?",
               options: ["General Work Activities (GWAs)", "Intermediate Work Activities (IWAs)", "Detailed Work Activities (DWAs)", "Tasks", "Not sure"],
               showIf: { question: "taxonomy_option", equals: "Option 2" } },
-            { id: "how", type: "textarea", label: "How is it relevant, and how would you use it?", hint: "Please provide a brief explanation or example." },
-            { id: "onet_lmic", type: "textarea", label: "Can you study AI exposure in LMICs using activities from O*NET?" }
+            { id: "how", code: "HOW", type: "textarea", label: "How is it relevant, and how would you use it?", hint: "Please provide a brief explanation or example." },
+            { id: "onet_lmic", code: "Q6", type: "textarea", label: "Can you study AI exposure in LMICs using activities from O*NET?" }
           ]
         },
         {
           id: "skills",
+          code: "SKL",
           label: "Skills",
           title: "Skills",
           show: {
@@ -162,16 +170,17 @@ window.SURVEY_CONFIG = {
             example: { note: "An example will be added once a skills classification is chosen." }
           },
           questions: [
-            { id: "skills_focus", type: "single", label: "Which is more important: the skills that the generative AI uses, or the skills the person is asking the generative AI to use?",
+            { id: "skills_focus", code: "Q1", type: "single", label: "Which is more important: the skills that the generative AI uses, or the skills the person is asking the generative AI to use?",
               options: ["Skills the AI uses", "Skills the person is asking the AI to use", "Both equally", "Not sure"] },
-            { id: "need_if_activities", type: "scale", label: "Do you require skills mapping if an activity mapping already exists?", options: ["Yes", "No", "Not sure"] },
-            { id: "skills_framework", type: "single", label: "Which option is better suited to classify chats by this indicator?",
+            { id: "need_if_activities", code: "Q2", type: "scale", label: "Do you require skills mapping if an activity mapping already exists?", options: ["Yes", "No", "Not sure"] },
+            { id: "skills_framework", code: "Q3", type: "single", label: "Which option is better suited to classify chats by this indicator?",
               options: ["Option 1: ILO core skills", "Option 2: O*NET skills taxonomy", "Option 3: LinkedIn skills categories", "None of these"], allowOther: true, otherLabel: "Another framework (please name it)" },
-            { id: "skills_framework_why", type: "textarea", label: "Why is that one better for your work?", showIf: { question: "skills_framework", answered: true } }
+            { id: "skills_framework_why", code: "Q4", type: "textarea", label: "Why is that one better for your work?", showIf: { question: "skills_framework", answered: true } }
           ]
         },
         {
           id: "occupational_content",
+          code: "OCC",
           label: "Occupational Content",
           title: "Occupational Content",
           show: {
@@ -215,13 +224,14 @@ window.SURVEY_CONFIG = {
             }
           },
           questions: [
-            { id: "name_understood", type: "textarea", label: "Is ‘occupational field’ an indicator name you understand to mean ‘topics related to this occupation’?" },
-            { id: "isco_lmic", type: "textarea", label: "Is this 16-item list aggregated from ISCO occupations helpful in LMIC research?" },
-            { id: "national_taxonomies", type: "textarea", label: "Are you working with countries that are developing their own occupational taxonomies? Can they be mapped to ISCO, and then to this framework?" }
+            { id: "name_understood", code: "Q1", type: "textarea", label: "Is ‘occupational field’ an indicator name you understand to mean ‘topics related to this occupation’?" },
+            { id: "isco_lmic", code: "Q2", type: "textarea", label: "Is this 16-item list aggregated from ISCO occupations helpful in LMIC research?" },
+            { id: "national_taxonomies", code: "Q3", type: "textarea", label: "Are you working with countries that are developing their own occupational taxonomies? Can they be mapped to ISCO, and then to this framework?" }
           ]
         },
         {
           id: "industry",
+          code: "IND",
           label: "Industry",
           title: "Industry",
           show: {
@@ -271,6 +281,7 @@ window.SURVEY_CONFIG = {
         },
         {
           id: "automation",
+          code: "AUT",
           label: "Automation vs Augmentation",
           title: "Automation / Augmentation",
           show: {
@@ -285,11 +296,12 @@ window.SURVEY_CONFIG = {
             }
           },
           questions: [
-            { id: "taxonomy_feedback", type: "textarea", label: "Is this taxonomy useful? Do you have an alternative way to measure automation vs augmentation?" }
+            { id: "taxonomy_feedback", code: "Q1", type: "textarea", label: "Is this taxonomy useful? Do you have an alternative way to measure automation vs augmentation?" }
           ]
         },
         {
           id: "time_gains",
+          code: "TGN",
           label: "Time Gains",
           title: "Time Gains",
           show: {
@@ -313,6 +325,7 @@ window.SURVEY_CONFIG = {
         },
         {
           id: "expertise",
+          code: "PRF",
           label: "Proficiency",
           title: "Proficiency",
           show: {
@@ -333,12 +346,13 @@ window.SURVEY_CONFIG = {
             }
           },
           questions: [
-            { id: "best_option", type: "single", label: "Which option is better suited to classify chats by this indicator?",
+            { id: "best_option", code: "Q1", type: "single", label: "Which option is better suited to classify chats by this indicator?",
               options: ["Option 1: Domain expertise", "Option 2: Education level", "None of these", "Not sure"] }
           ]
         },
         {
           id: "language",
+          code: "LNG",
           label: "Language of Interaction",
           title: "Language of Interaction",
           show: {
@@ -357,6 +371,7 @@ window.SURVEY_CONFIG = {
         },
         {
           id: "time_of_use",
+          code: "TOU",
           label: "Time of Use",
           title: "Time of Use",
           show: {
@@ -377,7 +392,7 @@ window.SURVEY_CONFIG = {
             }
           },
           questions: [
-            { id: "taxonomy_option", type: "single", label: "Which taxonomy option do you prefer?",
+            { id: "taxonomy_option", code: "Q1", type: "single", label: "Which taxonomy option do you prefer?",
               options: ["Option 1: Hourly bands + weekday/weekend", "Option 2: 4-hourly bands with a weekday/weekend tag"], allowOther: true, otherLabel: "Another option (please specify)" }
           ]
         }
@@ -388,8 +403,7 @@ window.SURVEY_CONFIG = {
   /* ---------- COMBINED INDICATORS TAB ---------- */
   combinations: {
     title: "Build an indicator combination",
-    intro: "Pick up to four indicators, in the order you want to break messages down. The sentence below shows the share of messages in each selected category.",
-    max: 4,
+    intro: "Pick as many indicators as you like, in the order you want to break conversations down. The sentence below shows the share of conversations in each selected category.",
     maxPriorities: 5,
     showExampleData: false,   // true shows a "See example data" table under the summary
 
@@ -423,12 +437,13 @@ window.SURVEY_CONFIG = {
     ],
 
     builderQuestions: [
-      { id: "use_for", type: "textarea", label: "Why is this combination a priority for your work?" }
+      { id: "use_for", code: "WHY", type: "textarea", label: "Why is this combination a priority for your work?" }
     ],
 
     // A featured combination with its own chart and questions, shown below the builder.
     featured: {
       id: "combo_uc_wa",
+      code: "FWC",
       hidden: true,             // remove this line to show the section again
       heading: "Filter Work Chats",
       showChart: true,          // false hides the chart
@@ -478,10 +493,10 @@ window.SURVEY_CONFIG = {
         ]
       },
       questions: [
-        { id: "useful", type: "scale", label: "Is it useful to you to get messages broken down by use case and work activity?", options: ["Yes", "Somewhat", "No", "Not sure"] },
-        { id: "onet_sense", type: "scale", label: "Does it make sense to you to use the O*NET work activity classification for personal use and education, especially in low- and middle-income countries?", options: ["Yes", "No", "Not sure"] },
-        { id: "alt_education", type: "textarea", label: "If not, do you have an alternative suggestion for classifying chats that belong to the education use case?", showIf: { question: "onet_sense", equals: "No" } },
-        { id: "alt_personal", type: "textarea", label: "If not, do you have an alternative suggestion for classifying chats that belong to the personal use use case?", showIf: { question: "onet_sense", equals: "No" } }
+        { id: "useful", code: "Q1", type: "scale", label: "Is it useful to you to get messages broken down by use case and work activity?", options: ["Yes", "Somewhat", "No", "Not sure"] },
+        { id: "onet_sense", code: "Q2", type: "scale", label: "Does it make sense to you to use the O*NET work activity classification for personal use and education, especially in low- and middle-income countries?", options: ["Yes", "No", "Not sure"] },
+        { id: "alt_education", code: "Q3", type: "textarea", label: "If not, do you have an alternative suggestion for classifying chats that belong to the education use case?", showIf: { question: "onet_sense", equals: "No" } },
+        { id: "alt_personal", code: "Q4", type: "textarea", label: "If not, do you have an alternative suggestion for classifying chats that belong to the personal use use case?", showIf: { question: "onet_sense", equals: "No" } }
       ]
     }
   }

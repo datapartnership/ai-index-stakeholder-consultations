@@ -96,7 +96,8 @@
     const hintId = q.hint ? "hint_" + cssId(name) : null;
     const describedBy = [hintId, errId].filter(Boolean).join(" ");
     const isGroup = ["single", "multiple", "scale"].includes(q.type);
-    const wrap = el(isGroup ? "fieldset" : "div", { class: "q", "data-field": name });
+    const code = (meta && meta.codePrefix ? meta.codePrefix + "_" : "") + (q.code || q.id);
+    const wrap = el(isGroup ? "fieldset" : "div", { class: "q", "data-field": name, "data-code": code });
     const labelNode = el(isGroup ? "legend" : "label", { class: "q-label", for: isGroup ? null : "f_" + cssId(name) });
     labelNode.appendChild(document.createTextNode(q.label));
     if (q.required) labelNode.appendChild(el("span", { class: "req", "aria-hidden": "true", text: "*" }));
@@ -130,7 +131,7 @@
     }
     wrap.appendChild(body);
     wrap.appendChild(el("div", { class: "err", id: errId, "aria-live": "polite" }));
-    fields.push(Object.assign({ name, q, prefix }, meta));
+    fields.push(Object.assign({ name, code, q, prefix }, meta));
     return wrap;
   }
   function rawValue(f) {
@@ -469,7 +470,7 @@
       const panel = el("div", { class: "panel", role: "tabpanel", id: panelId(ind), "aria-labelledby": tabId(ind), hidden: true });
       panel.appendChild(renderLeft(ind));
       const qs = el("div", { class: "panel-right" });
-      const meta = { indicatorId: ind.id };
+      const meta = { indicatorId: ind.id, codePrefix: ind.code || ind.id };
       const common = (page.commonQuestions || []).filter(q => !(ind.skipCommon || []).includes(q.id));
       (ind.questionsBefore || []).concat(common, ind.questions || []).forEach(q => qs.appendChild(renderQuestion(q, prefix, meta)));
       const nav = el("div", { class: "panel-nav" });
@@ -506,11 +507,25 @@
   // ---------- indicator combinations view ----------
   const comboInd = id => combosCfg.indicators.find(x => x.id === id);
   const comboName = ids => ids.map(id => { const x = comboInd(id); return x ? (x.short || x.label) : id; }).join(" × ");
-  const COMBO_COLORS = ["#1e5aa8", "#b5471e", "#16735b", "#885d00"];
+  const COMBO_COLORS = ["#1e5aa8", "#b5471e", "#16735b", "#885d00", "#8a2f6b", "#5a3ea6", "#1f6f7a", "#a1342f", "#4d6b12", "#6b4a2b"];
 
+  // Figures are built step by step along the highlighted categories, so any number of indicators stays fast.
   function comboModel(ids) {
-    const inds = ids.map(comboInd);
-    const key = ids.join("+");
+    const inds = ids.map(comboInd), key = ids.join("+");
+    const hl = [], shares = [];
+    inds.forEach(ind => {
+      const t = ind.weights.reduce((s, x) => s + x, 0);
+      const v = ind.cats.map((_, i) => (ind.weights[i] / t) * (0.85 + 0.3 * C.unit(key + ":" + hl.concat(i).join("."))));
+      const total = v.reduce((s, x) => s + x, 0);
+      let best = 0, bv = -1;
+      // The sentence describes a named category, never "Other …".
+      ind.cats.forEach((name, i) => { if (!/^Other/.test(name) && v[i] > bv) { bv = v[i]; best = i; } });
+      hl.push(best); shares.push(v[best] / total);
+    });
+    return { inds, hl, shares, get paths() { return comboPaths(inds, key); } };
+  }
+  // Every combination of categories; only used for the optional example-data table.
+  function comboPaths(inds, key) {
     const paths = [];
     (function walk(c, k, v) {
       if (c === inds.length) { paths.push({ k: k.slice(), v: v * (0.6 + 0.8 * C.unit(key + ":" + k.join("."))) }); return; }
@@ -519,22 +534,7 @@
     })(0, [], 1);
     const total = paths.reduce((s, p) => s + p.v, 0);
     paths.forEach(p => (p.v /= total));
-    // Highlight: the most common category at each step, given the steps before it.
-    const hl = []; let pool = paths;
-    inds.forEach((ind, c) => {
-      let best = 0, bv = -1;
-      ind.cats.forEach((name, i) => {
-        if (/^Other/.test(name)) return;   // the sentence describes a named category, never "Other …"
-        const v = pool.filter(p => p.k[c] === i).reduce((s, p) => s + p.v, 0); if (v > bv) { bv = v; best = i; }
-      });
-      hl.push(best); pool = pool.filter(p => p.k[c] === best);
-    });
-    const shares = hl.map((cat, c) => {
-      const base = paths.filter(p => hl.slice(0, c).every((x, j) => p.k[j] === x));
-      const hit = base.filter(p => p.k[c] === cat);
-      return hit.reduce((s, p) => s + p.v, 0) / (base.reduce((s, p) => s + p.v, 0) || 1);
-    });
-    return { inds, paths, hl, shares };
+    return paths;
   }
   function phraseNodes(ind, cat, color) {
     let x = ind.words && ind.words[cat] ? ind.words[cat] : cat;
@@ -621,7 +621,7 @@
 
     function drawPills() {
       pillRow.innerHTML = "";
-      const max = combosCfg.max || 4;
+      const max = combosCfg.max || Infinity;
       combosCfg.indicators.forEach(ind => {
         const pos = combo.sel.indexOf(ind.id);
         const on = pos >= 0, full = combo.sel.length >= max;
@@ -723,7 +723,7 @@
       }
       left.appendChild(inner);
       const right = el("div", { class: "panel-right" });
-      (f.questions || []).forEach(q => right.appendChild(renderQuestion(q, f.id + "__", { indicatorId: null })));
+      (f.questions || []).forEach(q => right.appendChild(renderQuestion(q, f.id + "__", { indicatorId: null, codePrefix: f.code || f.id })));
       panel.appendChild(left); panel.appendChild(right);
       wrap.appendChild(panel);
       section.appendChild(wrap);
@@ -816,7 +816,7 @@
   function restoreDraft(d) {
     if (d.combo && combosCfg) {
       const valid = id => combosCfg.indicators.some(x => x.id === id && !x.disabled);
-      combo.sel = (d.combo.sel || []).filter(valid).slice(0, combosCfg.max || 4);
+      combo.sel = (d.combo.sel || []).filter(valid).slice(0, combosCfg.max || Infinity);
       combo.priorities = (d.combo.priorities || []).filter(p => p && Array.isArray(p.ids) && p.ids.every(valid)).slice(0, combosCfg.maxPriorities || 5);
     }
     if (!d.values) return;
@@ -864,19 +864,20 @@
   }
 
   function buildPayload() {
-    const out = { responseId: uuid(), submittedAt: new Date().toISOString() };
+    // Keys are the question codes listed in README.md (e.g. ACT_Q1); keep them stable for the backend.
+    const out = { responseId: uuid(), submittedAt: new Date().toISOString(), surveyVersion: cfg.surveyVersion || "" };
     fields.forEach(f => {
       const shown = isShown(f);
       const v = shown ? rawValue(f) : (f.q.type === "multiple" ? [] : "");
-      out[f.name] = Array.isArray(v) ? v.map(x => (x === OTHER ? "Other" : x)).join("; ") : (v === OTHER ? "Other" : v);
-      if (f.q.allowOther) out[f.name + "_other"] = shown && hasOther(v) ? otherText(f) : "";
+      out[f.code] = Array.isArray(v) ? v.map(x => (x === OTHER ? "Other" : x)).join("; ") : (v === OTHER ? "Other" : v);
+      if (f.q.allowOther) out[f.code + "_OTH"] = shown && hasOther(v) ? otherText(f) : "";
     });
     if (combosCfg) {
+      const qUse = (combosCfg.builderQuestions || []).find(q => q.id === "use_for");
       for (let i = 0; i < (combosCfg.maxPriorities || 5); i++) {
         const p = combo.priorities[i];
-        out[`priority_${i + 1}_indicators`] = p ? comboName(p.ids) : "";
-        out[`priority_${i + 1}_useful`] = p ? p.useful : "";
-        out[`priority_${i + 1}_use_for`] = p ? p.use_for : "";
+        out[`CMB_P${i + 1}_IND`] = p ? comboName(p.ids) : "";
+        out[`CMB_P${i + 1}_${(qUse && qUse.code) || "WHY"}`] = p ? p.use_for : "";
       }
     }
     return out;

@@ -69,7 +69,7 @@ Recommended backend behaviour, matching `worker.js`:
 | --- | --- |
 | Allowed origin (CORS) | Only the survey's own origin |
 | Max request size | 20,000 bytes |
-| Max number of fields | 120 (the survey currently sends 55) |
+| Max number of fields | 120 (the survey currently sends 56) |
 | Max length per value | 5,000 characters |
 | Key format | `^[A-Za-z0-9_]{1,64}$`; reject anything else |
 | Values | String, number, boolean or null only |
@@ -113,11 +113,12 @@ Every indicator and every question in `questions.js` has a `code`. Each answer i
 
 | Code | Indicator |
 | --- | --- |
+| `RSP` | About the respondent (top of the survey, `aboutQuestions` in `questions.js`) |
 | `CHR` | User Characteristics |
 | `USE` | Use Case |
 | `ACT` | Work Activity |
 | `SKL` | Skills |
-| `OCC` | Occupational Content |
+| `OCC` | Occupational field |
 | `IND` | Industry |
 | `AUT` | Automation vs Augmentation |
 | `TGN` | Time Gains |
@@ -136,6 +137,7 @@ Every indicator and every question in `questions.js` has a `code`. Each answer i
 
 | Code | Indicator | Type | Question |
 | --- | --- | --- | --- |
+| `RSP_Q1` | About the respondent | text | Which sector do you work in? |
 | `CHR_HOW` | User Characteristics | textarea | How is it relevant, and how would you use it? |
 | `CHR_Q1` | User Characteristics | multiple (max 3) | Which of these is highest priority for you? (Choose up to 3) <br>Options: Age / Level of education / Urban or rural / Gender / User occupation / Income / Seniority and experience |
 | `USE_REL` | Use Case | scale | Is this indicator relevant for policy, development investment, or research decisions? |
@@ -157,11 +159,11 @@ Every indicator and every question in `questions.js` has a `code`. Each answer i
 | `SKL_Q3` | Skills | single | Which option is better suited to classify chats by this indicator? <br>Options: Option 1: ILO core skills / Option 2: O*NET skills taxonomy / Option 3: LinkedIn skills categories / None of these / Other |
 | `SKL_Q3_OTH` | Skills | text | Free text when "Other" is chosen in `SKL_Q3` |
 | `SKL_Q4` | Skills | textarea | Why is that one better for your work? <br>_Shown only if `SKL_Q3` is answered_ |
-| `OCC_REL` | Occupational Content | scale | Is this indicator relevant for policy, development investment, or research decisions? |
-| `OCC_HOW` | Occupational Content | textarea | How is it relevant, and how would you use it? |
-| `OCC_Q1` | Occupational Content | textarea | Is 'occupational field' an indicator name you understand to mean 'topics related to this occupation'? |
-| `OCC_Q2` | Occupational Content | textarea | Is this 16-item list aggregated from ISCO occupations helpful in LMIC research? |
-| `OCC_Q3` | Occupational Content | textarea | Are you working with countries that are developing their own occupational taxonomies? Can they be mapped to ISCO, and then to this framework? |
+| `OCC_REL` | Occupational field | scale | Is this indicator relevant for policy, development investment, or research decisions? |
+| `OCC_HOW` | Occupational field | textarea | How is it relevant, and how would you use it? |
+| `OCC_Q1` | Occupational field | textarea | Is 'occupational field' an indicator name you understand to mean 'topics related to this occupation'? |
+| `OCC_Q2` | Occupational field | textarea | Is this 16-item list aggregated from ISCO occupations helpful in LMIC research? |
+| `OCC_Q3` | Occupational field | textarea | Are you working with countries that are developing their own occupational taxonomies? Can they be mapped to ISCO, and then to this framework? |
 | `IND_REL` | Industry | scale | Is this indicator relevant for policy, development investment, or research decisions? |
 | `IND_HOW` | Industry | textarea | How is it relevant, and how would you use it? |
 | `AUT_REL` | Automation vs Augmentation | scale | Is this indicator relevant for policy, development investment, or research decisions? |

@@ -51,6 +51,11 @@ window.SURVEY_CONFIG = {
   country: "Country A",
   illustrativeNote: "Illustrative figures for an example country. Not real data.",
 
+  // Shown once at the top of the survey, before the indicator tabs. Answers are sent as RSP_<code>.
+  aboutQuestions: [
+    { id: "sector", code: "Q1", type: "text", label: "Which sector do you work in?" }
+  ],
+
   pages: [
     {
       id: "adoption",
@@ -181,8 +186,8 @@ window.SURVEY_CONFIG = {
         {
           id: "occupational_content",
           code: "OCC",
-          label: "Occupational Content",
-          title: "Occupational Content",
+          label: "Occupational field",
+          title: "Occupational field",
           show: {
             definition: "The occupational field a conversation or message relates to. This is not the user’s occupation: a lawyer and a person looking for legal advice would both be classified under ‘Legal’.",
             definitionHighlight: "This is not the user’s occupation:",
@@ -235,7 +240,7 @@ window.SURVEY_CONFIG = {
           label: "Industry",
           title: "Industry",
           show: {
-            definition: "This indicator measures the industry or sector that the chat relates to. It does not measure the occupational content. For example, for a chat, the work activity could be ‘Edit written materials or documents’, the occupational content could be ‘Teaching’ and the industry could be ‘Health’.",
+            definition: "This indicator measures the industry or sector that the chat relates to. It does not measure the occupational field. For example, for a chat, the work activity could be ‘Edit written materials or documents’, the occupational field could be ‘Teaching’ and the industry could be ‘Health’.",
             taxonomy: "The 21 sections of the International Standard Industrial Classification of All Economic Activities (ISIC Rev. 4).",
             taxonomyTable: {
               columns: ["Section", "Description", "Divisions"],
@@ -410,16 +415,16 @@ window.SURVEY_CONFIG = {
     // `phrase` builds the example sentence: {x} is the selected category name.
     indicators: [
       { id: "use_case", label: "Use Case", cats: ["Work", "Personal use", "Education"], weights: [46, 38, 16],
-        phrase: "are {x}", lower: true },
+        phrase: "are {x}", lower: true, words: { Work: "work-related" } },
       { id: "work_activities", label: "Work Activity",
         cats: ["Information Input", "Mental Processes", "Work Output", "Interacting with Others"], weights: [16, 34, 22, 28],
         phrase: "involve {x} activities", lower: true, note: "Work activities shows the four O*NET GWA categories." },
       { id: "skills", label: "Skills",
         cats: ["Tech skills", "Disruptive tech skills", "Soft skills", "Business skills", "Green skills"], weights: [30, 12, 26, 24, 8],
         phrase: "use {x}", lower: true, note: "Skills shows the LinkedIn skills categories." },
-      { id: "occupational_content", label: "Occupational Content",
+      { id: "occupational_content", label: "Occupational field",
         cats: ["Teaching", "Business and administration", "Health", "Information and communications technology", "Other fields"], weights: [30, 15, 12, 10, 33],
-        phrase: "relate to {x} work", lower: true, note: "Occupational content shows the four largest of the 16 fields plus all others." },
+        phrase: "relate to {x}", lower: true, note: "Occupational field shows the four largest of the 16 fields plus all others." },
       { id: "industry", label: "Industry",
         cats: ["Human health and social work", "Education", "Financial and insurance activities", "Information and communication", "Other industries"], weights: [30, 14, 10, 9, 37],
         phrase: "relate to {x}", lower: true, note: "Industry shows the four largest industry groups plus all others." },

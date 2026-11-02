@@ -310,12 +310,14 @@
             groups: cats.map((c, i) => ({ name: c.name, color: C.PALETTE[i], items: c.gwas.map(g => ({ name: g.name, value: g.value, children: g.children.map(x => ({ name: x.name, value: x.value })) })) })) }));
           fig.appendChild(el("p", { class: "dsub", text: "By GWA category" }));
           fig.appendChild(legendFor("iwa"));
-          const iwas = cats.flatMap(c => c.gwas.flatMap(g => g.children)).sort((a, b) => b.value - a.value).slice(0, 10);
+          const allIwas = cats.flatMap(c => c.gwas.flatMap(g => g.children)).sort((a, b) => b.value - a.value);
+          const iwas = allIwas.slice(0, 10);
           fig.appendChild(el("p", { class: "dsub", text: "Largest IWAs" }));
           fig.appendChild(el("ol", { class: "rank" }, iwas.map(x => el("li", null, [
             el("span", { class: "r-name", text: x.name }), el("span", { class: "r-meta", text: x.gwa }), el("b", { text: C.pct(x.value) })]))));
           fig.appendChild(el("p", { class: "chart-note", text: NOTE + " The inner ring shows each IWA's GWA. Hover over or tap a segment to see its name and share." }));
           stage.appendChild(fig);
+          stage.appendChild(searchBlock(allIwas, "Search all IWAs", x => `${x.gwa} · ${C.pct(x.value, 2)}`));
         } else if (mode === "dwa") {
           if (!data) return stage.appendChild(needData("DWA"));
           const dwas = cats.flatMap(c => c.gwas.flatMap(g => g.children.flatMap(i => i.dwas))).sort((a, b) => b.value - a.value);
@@ -754,6 +756,11 @@
     if (cfg.siteTitle) { document.title = cfg.siteTitle; const t = $("#siteTitle"); if (t) t.textContent = cfg.siteTitle; }
 
     const form = el("form", { id: "survey", novalidate: true });
+    if ((cfg.aboutQuestions || []).length) {
+      const about = el("section", { class: "card about-card", "aria-label": "About you" });
+      cfg.aboutQuestions.forEach(q => about.appendChild(renderQuestion(q, "about__", { indicatorId: null, codePrefix: "RSP" })));
+      form.appendChild(about);
+    }
     if (combosCfg) {
       const tabs = el("div", { class: "view-tabs", role: "tablist", "aria-label": "Survey sections" });
       [["vt_single", cfg.individualTabLabel || "Individual indicators", "single", "view_single"], ["vt_combos", cfg.combinedTabLabel || "Combined indicators", "combos", "view_combos"]].forEach(([id, label, k, ctl]) => {

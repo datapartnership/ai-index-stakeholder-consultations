@@ -24,11 +24,24 @@ dotnet tool restore
 
 dotnet user-secrets set "ConnectionStrings:SurveyDatabase" '<your SQL Server or Azure SQL connection string>' --project src/StakeholderConsultations.Web
 dotnet user-secrets set "Survey:ExportKey" '<a long random export secret>' --project src/StakeholderConsultations.Web
+dotnet user-secrets set "Survey:AccessPassword" '<the password you share with stakeholders>' --project src/StakeholderConsultations.Web
 
 dotnet run --project src/StakeholderConsultations.Web
 ```
 
-Open <http://localhost:5080>. The frontend submits directly to `/api/responses`; no separate frontend server or CORS configuration is needed. User secrets are loaded in Development. Environment-variable equivalents are `ConnectionStrings__SurveyDatabase` and `Survey__ExportKey`. Do not commit credentials or pass them as URL parameters.
+Open <http://localhost:5080>. The frontend submits directly to `/api/responses`; no separate frontend server or CORS configuration is needed. User secrets are loaded in Development. Environment-variable equivalents are `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey` and `Survey__AccessPassword`. Do not commit credentials or pass them as URL parameters.
+
+## Survey password
+
+When `Survey:AccessPassword` (env var `Survey__AccessPassword`) is set, the survey is password-protected:
+
+- Visitors without access are redirected to `/login`, a small page that asks for the shared password. This covers the page, its scripts and styles, and the `data/*.json` files.
+- The correct password sets an `HttpOnly`, `SameSite=Lax` cookie (`Secure` over HTTPS) that lasts 30 days, then sends the visitor to the survey.
+- `/api/responses` returns `401` with `{ "ok": false, "error": "Password required" }` without the cookie.
+- `/api/export` isn't affected; it still uses only `X-Export-Key`.
+- Login attempts are limited to 20 per minute per client IP; extra attempts get `429`.
+- The cookie is derived from the password, so it keeps working across restarts and instances. **Changing the password signs everyone out**; they need the new password to continue.
+- If the setting is empty or missing, the survey is public and startup logs a warning.
 
 When `ConnectionStrings:SurveyDatabase` is configured, the application applies pending EF Core migrations at startup before accepting requests. On the first run, this creates the `Responses` table, its index, and the EF migration history. Later starts apply only pending migrations and preserve existing responses. The database account must have permission to create and update the schema. If the configured database is unavailable or a migration fails, startup fails so the container can report the problem and be restarted after it is resolved.
 
@@ -41,7 +54,7 @@ Without a connection string, startup skips migrations and the homepage remains a
 - The body must be a flat JSON object with 1–120 fields, at most 20,000 UTF-8 bytes, including requests without a Content-Length header.
 - Field names must match `^[A-Za-z0-9_]{1,64}$`. Duplicate keys are rejected. Values may be strings (at most 5,000 UTF-16 code units), numbers, booleans, or null; objects and arrays are rejected.
 - Browser requests must have the application's own origin. Requests without an Origin header are accepted. Foreign or malformed origins return `403`; cross-origin access is not enabled.
-- Successful persistence returns `200` with `{ "ok": true }`. Failures return `{ "ok": false, "error": "..." }`: `400` for invalid JSON/fields, `413` for oversized bodies, `415` for unsupported media types, and `503` for storage failures.
+- Successful persistence returns `200` with `{ "ok": true }`. Failures return `{ "ok": false, "error": "..." }`: `400` for invalid JSON/fields, `413` for oversized bodies, `415` for unsupported media types, `401` when the survey password is enabled and the access cookie is missing, and `503` for storage failures.
 - Responses contain a server-generated GUID, server UTC receipt timestamp, and the answers in an `nvarchar(max)` JSON column. Submitted `responseId` and `receivedAt` fields are discarded; client `submittedAt` is retained as an answer. New question codes need no database migration.
 - No visitor IP addresses, user agents, request bodies, or export credentials are recorded by application logging. SQL sensitive-data logging is not enabled. Azure/platform access logging is configured separately.
 - The frontend retains answers on the page after a failed request so the respondent can retry. Each successful POST creates a new response; retries are not deduplicated.
@@ -100,13 +113,13 @@ Build from the repository root:
 ```sh
 docker build --pull -t stakeholder-consultations:local .
 docker run --rm --name stakeholder-consultations -p 8080:8080 \
-  -e ConnectionStrings__SurveyDatabase -e Survey__ExportKey \
+  -e ConnectionStrings__SurveyDatabase -e Survey__ExportKey -e Survey__AccessPassword \
   stakeholder-consultations:local
 ```
 
 Open <http://localhost:8080>. The image serves both the frontend and API, runs as the .NET image's non-root user, and listens on container port `8080`. The SDK is used only in the build stage; the final image contains the ASP.NET Core runtime and published application.
 
-Set `ConnectionStrings__SurveyDatabase` and `Survey__ExportKey` in your shell or deployment platform before running the container. The `-e NAME` options forward those environment variables without embedding their values in the image. The database must be reachable from inside the container; `localhost` refers to the container itself. The container automatically creates or updates the schema at startup using the configured database account, which must have schema migration permissions. Without SQL configuration, the frontend still loads and submissions return `503`.
+Set `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey` and `Survey__AccessPassword` in your shell or deployment platform before running the container. The `-e NAME` options forward those environment variables without embedding their values in the image. The database must be reachable from inside the container; `localhost` refers to the container itself. The container automatically creates or updates the schema at startup using the configured database account, which must have schema migration permissions. Without SQL configuration, the frontend still loads and submissions return `503`.
 
 The Docker build context includes only the web project, excluding local build output, local settings, credential files, documents, and raw O*NET downloads. Both browser JSON datasets are included in the image.
 
@@ -131,7 +144,7 @@ Once the workflow has published an image:
 ```sh
 docker pull ghcr.io/datapartnership/ai-index-stakeholder-consultations:latest
 docker run --rm -p 8080:8080 \
-  -e ConnectionStrings__SurveyDatabase -e Survey__ExportKey \
+  -e ConnectionStrings__SurveyDatabase -e Survey__ExportKey -e Survey__AccessPassword \
   ghcr.io/datapartnership/ai-index-stakeholder-consultations:latest
 ```
 
@@ -140,7 +153,7 @@ Authenticate with `docker login ghcr.io` first when pulling a private package. I
 ## Azure App Service
 
 1. Use a .NET 10 Azure App Service on Windows or Linux and an existing Azure SQL database reachable from that app.
-2. Configure `ConnectionStrings__SurveyDatabase` and `Survey__ExportKey` as App Service environment settings. Set `ASPNETCORE_ENVIRONMENT=Production`, enable HTTPS Only, and set `AllowedHosts` to the app hostname (semicolon-separated if using multiple domains).
+2. Configure `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey` and `Survey__AccessPassword` as App Service environment settings. Set `ASPNETCORE_ENVIRONMENT=Production`, enable HTTPS Only, and set `AllowedHosts` to the app hostname (semicolon-separated if using multiple domains).
 3. For Linux App Service HTTPS proxy termination, set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` in the managed App Service environment so the application sees the external HTTPS scheme for same-origin checks. Windows/IIS uses ASP.NET Core's IIS integration. If hosting behind a different proxy, explicitly configure trusted forwarding for that environment.
 4. Deploy the **contents** of `artifacts/publish/` as one app, including the DLLs, configuration, and `wwwroot/`. The app applies pending database migrations on startup, so its configured database account needs schema migration permissions. Linux startup is `dotnet StakeholderConsultations.Web.dll`; it must not use the previous Node/PM2 static-server command.
 5. For Windows/IIS, use the `web.config` generated by `dotnet publish`. The old static-only repository `web.config` has been removed.

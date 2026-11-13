@@ -8,6 +8,7 @@ builder.Services.AddDbContext<SurveyDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("SurveyDatabase"),
         sql => sql.EnableRetryOnFailure()));
 builder.Services.AddScoped<ISurveyResponseStore, SqlSurveyResponseStore>();
+builder.Services.AddAccessGate();
 
 var app = builder.Build();
 
@@ -29,8 +30,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+app.UseAccessGate();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.MapAccessGate();
 app.MapSurveyEndpoints();
 
 app.Run();

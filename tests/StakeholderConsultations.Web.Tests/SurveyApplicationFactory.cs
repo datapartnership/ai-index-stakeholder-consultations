@@ -9,7 +9,7 @@ namespace StakeholderConsultations.Web.Tests;
 
 public sealed class SurveyApplicationFactory(
     string? exportKey = "test-export-secret", bool useFakeStore = true,
-    string? connectionString = null) : WebApplicationFactory<Program>
+    string? connectionString = null, string? accessPassword = null) : WebApplicationFactory<Program>
 {
     public TestResponseStore Store { get; } = new();
 
@@ -20,7 +20,8 @@ public sealed class SurveyApplicationFactory(
             new Dictionary<string, string?>
             {
                 ["Survey:ExportKey"] = exportKey,
-                ["ConnectionStrings:SurveyDatabase"] = connectionString
+                ["ConnectionStrings:SurveyDatabase"] = connectionString,
+                ["Survey:AccessPassword"] = accessPassword
             }));
         if (useFakeStore)
         {

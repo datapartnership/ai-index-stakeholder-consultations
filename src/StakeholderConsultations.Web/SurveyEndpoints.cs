@@ -94,7 +94,7 @@ public static class SurveyEndpoints
         }
     }
 
-    private static bool IsAllowedOrigin(HttpRequest request)
+    internal static bool IsAllowedOrigin(HttpRequest request)
     {
         if (!request.Headers.TryGetValue("Origin", out var origins)) return true;
         if (origins.Count != 1 ||
@@ -109,6 +109,6 @@ public static class SurveyEndpoints
             UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) == 0;
     }
 
-    private static IResult Error(int statusCode, string error) =>
+    internal static IResult Error(int statusCode, string error) =>
         Results.Json(new { ok = false, error }, statusCode: statusCode);
 }

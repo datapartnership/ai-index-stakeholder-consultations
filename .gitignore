@@ -3,3 +3,6 @@
 # Keep data/onet_activities.json and data/soc_tasks.json; the published survey loads them.
 data/db_31_0_excel/
 data/soc_tasks.csv
+
+# Exported survey responses (respondents' answers)
+survey-responses*.csv

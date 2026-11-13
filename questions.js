@@ -8,11 +8,11 @@
                  While it is left as the placeholder, the page runs in TEST MODE:
                  nothing is sent, and the data that *would* be sent is shown on screen.
 
-  The page opens with a short scrolling introduction (in index.html), then two tabs:
+  The page opens with a short scrolling introduction (in index.html),   then two tabs:
     Individual indicators   – `pages[0]`: a row of indicator buttons; each opens a split screen
                               (LEFT = what the data would look like, RIGHT = questions).
-    Combined indicators     – `combinations`: pick any number of indicators (set `max` to cap it) to see the summary,
-                              then rank the combinations you need; plus a featured combination.
+    Combined indicators     – `combinations`: pick up to `max` (3) indicators, with `exclusiveGroups` that can't be combined, to see the summary,
+                              then rank the combinations you need.
 
   THE LEFT SIDE OF AN INDICATOR (`show`) – every part is optional, shown in this order:
     what:     "What the indicator measures"            (shown as  What: …)
@@ -41,7 +41,7 @@
 
 window.SURVEY_CONFIG = {
   siteTitle: "AI Index stakeholder consultation",
-  surveyVersion: "2026-11",   // sent with every response; bump when questions change
+  surveyVersion: "2026-11-6",   // sent with every response; bump when questions change
 
   endpointUrl: "PASTE_YOUR_ENDPOINT_URL_HERE",
 
@@ -66,30 +66,11 @@ window.SURVEY_CONFIG = {
         "Answer as many indicators as are relevant to your work.",
 
       commonQuestions: [
-        { id: "relevant", code: "REL", type: "scale", label: "Is this indicator relevant for policy, development investment, or research decisions?", options: ["Yes", "Somewhat", "No", "Not sure"] },
-        { id: "how", code: "HOW", type: "textarea", label: "How is it relevant, and how would you use it?", hint: "Please provide a brief explanation or example." }
+        { id: "relevant", code: "REL", type: "scale", label: "Is this indicator relevant for policy, development investment, or research?", options: ["Yes", "Somewhat", "No", "Not sure"] },
+        { id: "how", code: "HOW", type: "textarea", label: "Is this useful to you? How would you use it? Which datasets would you combine this with?", hint: "Please provide specific examples of how this would be useful in your work." }
       ],
 
       indicators: [
-        {
-          id: "user_characteristics",
-          code: "CHR",
-          label: "User Characteristics",
-          title: "User Characteristics",
-          show: {
-            definition: "Characteristics of people who use Consumer Chat Generative AI in countries. These may or may not be the characteristics of the users whose chats are analyzed in the subsequent indicators.",
-            taxonomy: "A starter list of characteristics that we may want to measure:",
-            pillGroups: [
-              { sets: [{ pills: ["Age", "Level of education", "Urban or rural", "Gender", "User occupation", "Income", "Seniority and experience"] }] }
-            ],
-            example: { note: "An example will be added once the survey questions are agreed." }
-          },
-          skipCommon: ["relevant"],
-          questions: [
-            { id: "top_priority", code: "Q1", type: "multiple", max: 3, label: "Which of these is highest priority for you? (Choose up to 3)",
-              options: ["Age", "Level of education", "Urban or rural", "Gender", "User occupation", "Income", "Seniority and experience"] }
-          ]
-        },
         {
           id: "use_case",
           code: "USE",
@@ -97,11 +78,15 @@ window.SURVEY_CONFIG = {
           title: "Use Case",
           show: {
             definition: "Whether a chat was used in the context of work, education or personal use.",
-            definitionList: [
-              { term: "Work", text: "Paid employment, self-employment, or running a business; work done for an employer, a client, or for income; training the employer requires." },
-              { term: "Education", text: "Coursework, studying, exams, or training in a program the user is enrolled in." },
-              { term: "Personal use", text: "Household, family, health, finances, hobbies, and leisure; the user’s own job search; and self-directed learning." }
-            ],
+            definitionTable: {
+              columns: ["Use case", "Definition"],
+              rowHeader: 0,
+              rows: [
+                ["Work", "Paid employment, self-employment, or running a business; work done for an employer, a client, family business or for income; training the employer requires."],
+                ["Education", "Coursework, studying, exams, or training in a program the user is enrolled in."],
+                ["Personal use", "Household, family, health, finances, hobbies, and leisure; the user’s own job search; and self-directed learning."]
+              ]
+            },
             taxonomy: "Work, personal use, education.",
             example: {
               chart: {
@@ -113,87 +98,42 @@ window.SURVEY_CONFIG = {
             }
           },
           questions: [
-            { id: "work_definition", code: "Q1", type: "textarea", label: "Does this definition of work cover all forms of work in LMICs?" },
-            { id: "edu_personal_categories", code: "Q2", type: "textarea", label: "Do you have suggestions on activity categorizations for education and personal use that translate to LMICs?" }
+            { id: "work_definition", code: "Q1", type: "textarea", label: "Does this definition of work cover all forms of work in low- and middle-income countries?" },
+            { id: "edu_personal_categories", code: "Q2", type: "textarea", label: "Do you have suggestions on activity categorizations for education and personal use that translate to low- and middle-income countries?" }
           ]
         },
         {
           id: "work_activities",
           code: "ACT",
-          label: "Work Activity",
-          title: "Work Activity",
+          label: "Work Activities",
+          title: "Work Activities",
           show: {
             definition: "The main work activity that the conversation is used for.",
-            taxonomy: "The O*NET Work Activity taxonomies:",
+            taxonomy: "All chats are classified to O*NET Work Activities, at 1 of 2 O*NET levels:",
             taxonomyBullets: [
-              { term: "Option 1:", text: "Classify all chats to O*NET Work Activities by 1 of 4 O*NET levels. Within Option 1, we can classify chats by:",
-                sub: [
-                  { term: "General Work Activities (GWAs).", text: "Highest level, with 41 items." },
-                  { term: "Intermediate Work Activities (IWAs).", text: "332 items, which map to the GWAs." },
-                  { term: "Detailed Work Activities (DWAs)." },
-                  { term: "Tasks.", text: "19,000+ items created from US occupations and a survey of US workers." }
-                ] },
-              { term: "Option 2:", text: "Classify Work-related chats to O*NET Work Activities, Personal Use chats to Time Use Surveys, and Education chats also to Work Activities." }
+              { term: "General Work Activities (GWAs).", text: "Highest level, with 41 items." },
+              { term: "Intermediate Work Activities (IWAs).", text: "332 items, which map to the GWAs." }
             ],
             // The donuts, rankings and search come from data files built with tools/build_onet_data.py.
-            example: { explorer: { data: "data/onet_activities.json", tasks: "data/soc_tasks.json" } }
+            example: { explorer: { data: "data/onet_activities.json", levels: ["gwa", "iwa"] } }
           },
           skipCommon: ["how"],
           questions: [
-            { id: "taxonomy_option", code: "Q1", type: "single", label: "Which taxonomy option do you think is more suited?",
-              options: ["Option 1", "Option 2", "Not sure"] },
-            { id: "activity_vs_task", code: "Q2", type: "single", label: "Which of the 4 levels would be most useful to study the activities AI is used for?",
-              options: ["General Work Activities (GWAs)", "Intermediate Work Activities (IWAs)", "Detailed Work Activities (DWAs)", "Tasks", "Not sure"],
-              showIf: { question: "taxonomy_option", equals: "Option 1" } },
-            { id: "time_use_survey", code: "Q3", type: "textarea", label: "Which Time Use Survey is best suited to measure global chat data?",
-              showIf: { question: "taxonomy_option", equals: "Option 2" } },
-            { id: "education_onet", code: "Q4", type: "scale", label: "Can education-related chats be measured using O*NET work activities?", options: ["Yes", "No", "Not sure"],
-              showIf: { question: "taxonomy_option", equals: "Option 2" } },
-            { id: "work_level", code: "Q5", type: "single", label: "Which O*NET level is best suited to classify work-related chats?",
-              options: ["General Work Activities (GWAs)", "Intermediate Work Activities (IWAs)", "Detailed Work Activities (DWAs)", "Tasks", "Not sure"],
-              showIf: { question: "taxonomy_option", equals: "Option 2" } },
-            { id: "how", code: "HOW", type: "textarea", label: "How is it relevant, and how would you use it?", hint: "Please provide a brief explanation or example." },
-            { id: "onet_lmic", code: "Q6", type: "textarea", label: "Can you study AI exposure in LMICs using activities from O*NET?" }
-          ]
-        },
-        {
-          id: "skills",
-          code: "SKL",
-          label: "Skills",
-          title: "Skills",
-          show: {
-            definition: "Skill used by AI to create the output in this chat. This can be a one to many mapping between a chat and skills.",
-            pillGroups: [
-              { title: "Option 1: ILO core skills", note: "The skill groups in the ILO Global Framework on Core Skills.",
-                sets: [{ pills: ["Cognitive and metacognitive skills", "Basic digital skills", "Social and emotional skills", "Basic skills for green jobs"] }] },
-              { title: "Option 2: O*NET skills taxonomy", note: "A taxonomy of 35 skills, grouped into these high-level categories.",
-                sets: [ { label: "Basic skills", pills: ["Content skills", "Process skills"] },
-                        { label: "Cross-functional skills", pills: ["Social skills", "Complex problem solving skills", "Technical skills", "Systems skills", "Resource management skills"] } ] },
-              { title: "Option 3: LinkedIn skills categories", note: "A high-level categorization of skills. It is not a taxonomy.",
-                sets: [{ pills: ["Tech skills", "Soft skills", "Business skills", "Disruptive tech skills", "Green skills"] }] }
-            ],
-            example: { note: "An example will be added once a skills classification is chosen." }
-          },
-          questions: [
-            { id: "skills_focus", code: "Q1", type: "single", label: "Which is more important: the skills that the generative AI uses, or the skills the person is asking the generative AI to use?",
-              options: ["Skills the AI uses", "Skills the person is asking the AI to use", "Both equally", "Not sure"] },
-            { id: "need_if_activities", code: "Q2", type: "scale", label: "Do you require skills mapping if an activity mapping already exists?", options: ["Yes", "No", "Not sure"] },
-            { id: "skills_framework", code: "Q3", type: "single", label: "Which option is better suited to classify chats by this indicator?",
-              options: ["Option 1: ILO core skills", "Option 2: O*NET skills taxonomy", "Option 3: LinkedIn skills categories", "None of these"], allowOther: true, otherLabel: "Another framework (please name it)" },
-            { id: "skills_framework_why", code: "Q4", type: "textarea", label: "Why is that one better for your work?", showIf: { question: "skills_framework", answered: true } }
+            { id: "how", code: "HOW", type: "textarea", label: "Is this useful to you? How would you use it? Which datasets would you combine this with?", hint: "Please provide specific examples of how this would be useful in your work." },
+            { id: "onet_lmic", code: "Q6", type: "textarea", label: "Can you study AI exposure in low- and middle-income countries using activities from O*NET?" }
           ]
         },
         {
           id: "occupational_content",
           code: "OCC",
-          label: "Occupational field",
-          title: "Occupational field",
+          label: "Occupational Topic",
+          title: "Occupational Topic",
           show: {
-            definition: "The occupational field a conversation or message relates to. This is not the user’s occupation: a lawyer and a person looking for legal advice would both be classified under ‘Legal’.",
+            definition: "The occupational topic a conversation or message relates to. This is not the user’s occupation: a lawyer and a person looking for legal advice would both be classified under ‘Legal’.",
             definitionHighlight: "This is not the user’s occupation:",
             taxonomy: "16 categories created by aggregating ISCO occupations.",
             taxonomyTable: {
-              columns: ["#", "Field", "ISCO-08 groups", "The work, and in brackets the workers who do it"],
+              columns: ["#", "Topic", "ISCO-08 groups", "The work, and in brackets the workers who do it"],
               rows: [
                 ["1", "Management", "1", "Planning, directing, and coordinating an organization or a team; budgets; hiring (chief executives; department and project managers; owner-managers)"],
                 ["2", "Science and engineering", "21; 31", "Research, design, and calculation in the sciences, mathematics and statistics, engineering, and architecture; product and graphic design (scientists, statisticians, engineers, architects, designers; technicians)"],
@@ -217,21 +157,19 @@ window.SURVEY_CONFIG = {
             },
             example: {
               chart: {
-                title: "Share of messages by occupational field, Country A",
+                title: "Share of messages by occupational topic, Country A",
                 layout: "stacked",
                 unit: "%",
                 bars: [
                   { label: "Information and communications technology", value: 21 }, { label: "Business and administration", value: 17 },
                   { label: "Teaching", value: 12 }, { label: "Writing, translation, and the arts", value: 11 }, { label: "Health", value: 8 },
-                  { label: "All other fields", value: 31 }
+                  { label: "All other topics", value: 31 }
                 ]
               }
             }
           },
           questions: [
-            { id: "name_understood", code: "Q1", type: "textarea", label: "Is ‘occupational field’ an indicator name you understand to mean ‘topics related to this occupation’?" },
-            { id: "isco_lmic", code: "Q2", type: "textarea", label: "Is this 16-item list aggregated from ISCO occupations helpful in LMIC research?" },
-            { id: "national_taxonomies", code: "Q3", type: "textarea", label: "Are you working with countries that are developing their own occupational taxonomies? Can they be mapped to ISCO, and then to this framework?" }
+            { id: "isco_lmic", code: "Q2", type: "textarea", label: "This classification mixes 2 digit and 3 digit ISCO Occupation Levels. Would you be able to use it within your research?" }
           ]
         },
         {
@@ -240,7 +178,7 @@ window.SURVEY_CONFIG = {
           label: "Industry",
           title: "Industry",
           show: {
-            definition: "This indicator measures the industry or sector that the chat relates to. It does not measure the occupational field. For example, for a chat, the work activity could be ‘Edit written materials or documents’, the occupational field could be ‘Teaching’ and the industry could be ‘Health’.",
+            definition: "This indicator measures the industry or sector that the chat relates to. It does not measure the occupational topic. For example, for a chat, the work activity could be ‘Edit written materials or documents’, the occupational topic could be ‘Teaching’ and the industry could be ‘Health’.",
             taxonomy: "The 21 sections of the International Standard Industrial Classification of All Economic Activities (ISIC Rev. 4).",
             taxonomyTable: {
               columns: ["Section", "Description", "Divisions"],
@@ -285,50 +223,6 @@ window.SURVEY_CONFIG = {
           questions: []
         },
         {
-          id: "automation",
-          code: "AUT",
-          label: "Automation vs Augmentation",
-          title: "Automation / Augmentation",
-          show: {
-            definition: "Whether AI completes a task on its own (automation) or supports a person who remains in charge of it (augmentation). For labor-market specialists this is replacement versus augmentation of tasks; in education, learning versus offloading; in digital development, which tasks are handed over to AI.",
-            taxonomy: "Automation consists of directive and feedback-loop chats. Augmentation consists of task iteration, learning and validation.",
-            example: {
-              chart: {
-                type: "split",
-                title: "Share of messages that automate or augment work, Country A",
-                parts: [ { name: "Augmentation", value: 54 }, { name: "Automation", value: 46 } ]
-              }
-            }
-          },
-          questions: [
-            { id: "taxonomy_feedback", code: "Q1", type: "textarea", label: "Is this taxonomy useful? Do you have an alternative way to measure automation vs augmentation?" }
-          ]
-        },
-        {
-          id: "time_gains",
-          code: "TGN",
-          label: "Time Gains",
-          title: "Time Gains",
-          show: {
-            definition: "The time saved by using generative AI for an activity: the time a competent person (not a beginner or an expert) would need without AI, minus the time spent with AI.",
-            taxonomy: "Broad, roughly logarithmic bands, which reduce classification errors:",
-            taxonomyList: [
-              { term: "Less than 5 minutes", text: "A few minutes of work." },
-              { term: "5 minutes to 1 hour", text: "Between a few minutes and an hour’s work." },
-              { term: "1 to 8 hours", text: "Between an hour and a day’s work." },
-              { term: "More than 8 hours", text: "More than a day’s work; can be split further." }
-            ],
-            example: {
-              chart: {
-                title: "Share of messages by time saved, Country A",
-                unit: "%",
-                bars: [ { label: "Less than 5 minutes", value: 41 }, { label: "5 minutes to 1 hour", value: 38 }, { label: "1 to 8 hours", value: 17 }, { label: "More than 8 hours", value: 4 } ]
-              }
-            }
-          },
-          questions: []
-        },
-        {
           id: "expertise",
           code: "PRF",
           label: "Proficiency",
@@ -340,7 +234,17 @@ window.SURVEY_CONFIG = {
               { title: "Option 1: Domain expertise", note: "Low, medium, or high. Classes with sharp boundaries are easier to classify reliably, and avoid comparing years of education across countries.",
                 sets: [{ pills: ["Low", "Medium", "High"] }] },
               { title: "Option 2: Education level (ILO, aggregate ISCED-97)", note: "An international standard for education levels. Very helpful for policy advice.",
-                sets: [{ pills: ["Less than basic", "Basic", "Intermediate", "Advanced", "Level not stated"] }] }
+                table: {
+                  columns: ["ILO aggregate level", "Corresponding ISCED-97 levels", "Definition & scope"],
+                  rowHeader: 0,
+                  rows: [
+                    ["Less than basic", "X. No schooling\n0. Pre-primary education", "Includes individuals with no formal education at all or those who only completed early childhood programs (typically starting at age 3) before primary school."],
+                    ["Basic", "1. Primary education (first stage of basic education)\n2. Lower secondary (second stage of basic education)", "Covers foundational learning in reading, writing, and mathematics, extending through subject-oriented middle or junior high school levels."],
+                    ["Intermediate", "3. Upper secondary education\n4. Post-secondary non-tertiary education", "Encompasses specialized high school diplomas and practical or vocational training programs that prepare students for direct labor market entry or university."],
+                    ["Advanced", "5. First stage of tertiary education\n6. Second stage of tertiary education", "Includes all higher education, ranging from practical technical degrees and bachelor’s or master’s degrees (Level 5) to doctoral programs requiring an advanced research thesis (Level 6)."],
+                    ["Level not stated", "?. Level not stated", "Used in survey and census data when an individual’s highest completed level of education is unknown, unclassifiable, or was not reported."]
+                  ]
+                } }
             ],
             example: {
               chart: {
@@ -362,7 +266,7 @@ window.SURVEY_CONFIG = {
           title: "Language of Interaction",
           show: {
             definition: "The share of messages in each of a country’s main languages, per quarter.",
-            taxonomy: "For every country, the languages spoken by at least 10% of the population.",
+            taxonomy: "For every country, the languages spoken by at least 7% of the population.",
             example: {
               chart: {
                 type: "split",
@@ -373,33 +277,6 @@ window.SURVEY_CONFIG = {
             }
           },
           questions: []
-        },
-        {
-          id: "time_of_use",
-          code: "TOU",
-          label: "Time of Use",
-          title: "Time of Use",
-          show: {
-            definition: "When consumer chat is used: time of day, day of week and day of month. This is recorded, not inferred.",
-            taxonomyBullets: [
-              { term: "Option 1:", text: "Hourly bands + weekday/weekend." },
-              { term: "Option 2:", text: "4-hourly bands combined with a weekday/weekend tag." }
-            ],
-            example: {
-              chart: {
-                title: "Share of weekday messages by time of day, Country A",
-                unit: "%",
-                bars: [
-                  { label: "00:00–04:00", value: 4 }, { label: "04:00–08:00", value: 7 }, { label: "08:00–12:00", value: 27 },
-                  { label: "12:00–16:00", value: 28 }, { label: "16:00–20:00", value: 20 }, { label: "20:00–24:00", value: 14 }
-                ]
-              }
-            }
-          },
-          questions: [
-            { id: "taxonomy_option", code: "Q1", type: "single", label: "Which taxonomy option do you prefer?",
-              options: ["Option 1: Hourly bands + weekday/weekend", "Option 2: 4-hourly bands with a weekday/weekend tag"], allowOther: true, otherLabel: "Another option (please specify)" }
-          ]
         }
       ]
     }
@@ -408,7 +285,10 @@ window.SURVEY_CONFIG = {
   /* ---------- COMBINED INDICATORS TAB ---------- */
   combinations: {
     title: "Build an indicator combination",
-    intro: "Pick as many indicators as you like, in the order you want to break conversations down. The sentence below shows the share of conversations in each selected category.",
+    intro: "Combining multiple indicators is limited by size of the sample. Pills will be grayed out if a specific indicator combination is not possible owing to sample size",
+    max: 3,                   // most indicators allowed in one combination
+    // Within each group, picking one indicator disables the others.
+    exclusiveGroups: [["work_activities", "occupational_content", "industry"]],
     maxPriorities: 5,
     showExampleData: false,   // true shows a "See example data" table under the summary
 
@@ -416,93 +296,29 @@ window.SURVEY_CONFIG = {
     indicators: [
       { id: "use_case", label: "Use Case", cats: ["Work", "Personal use", "Education"], weights: [46, 38, 16],
         phrase: "are {x}", lower: true, words: { Work: "work-related" } },
-      { id: "work_activities", label: "Work Activity",
-        cats: ["Information Input", "Mental Processes", "Work Output", "Interacting with Others"], weights: [16, 34, 22, 28],
-        phrase: "involve {x} activities", lower: true, note: "Work activities shows the four O*NET GWA categories." },
-      { id: "skills", label: "Skills",
-        cats: ["Tech skills", "Disruptive tech skills", "Soft skills", "Business skills", "Green skills"], weights: [30, 12, 26, 24, 8],
-        phrase: "use {x}", lower: true, note: "Skills shows the LinkedIn skills categories." },
-      { id: "occupational_content", label: "Occupational field",
-        cats: ["Teaching", "Business and administration", "Health", "Information and communications technology", "Other fields"], weights: [30, 15, 12, 10, 33],
-        phrase: "relate to {x}", lower: true, note: "Occupational field shows the four largest of the 16 fields plus all others." },
+      { id: "work_activities", label: "Work Activities", catsFrom: "gwa", cats: [], weights: [],
+        phrase: "involve the work activity “{x}”", note: "Work activities shows the 41 O*NET General Work Activities (GWAs)." },
+      { id: "occupational_content", label: "Occupational Topic",
+        cats: ["Teaching", "Business and administration", "Health", "Information and communications technology", "Other topics"], weights: [30, 15, 12, 10, 33],
+        phrase: "relate to {x}", lower: true, note: "Occupational topic shows the four largest of the 16 topics plus all others." },
       { id: "industry", label: "Industry",
-        cats: ["Human health and social work", "Education", "Financial and insurance activities", "Information and communication", "Other industries"], weights: [30, 14, 10, 9, 37],
-        phrase: "relate to {x}", lower: true, note: "Industry shows the four largest industry groups plus all others." },
-      { id: "automation", label: "Automation vs Augmentation", cats: ["Augmentation", "Automation"], weights: [54, 46],
-        phrase: "{x} work", words: { Augmentation: "augment", Automation: "automate" } },
-      { id: "time_gains", label: "Time Gains", cats: ["Less than 5 minutes", "5 minutes to 1 hour", "1 to 8 hours", "More than 8 hours"], weights: [41, 38, 17, 4],
-        phrase: "save {x}", words: { "Less than 5 minutes": "less than 5 minutes", "5 minutes to 1 hour": "between 5 minutes and an hour", "1 to 8 hours": "between 1 and 8 hours", "More than 8 hours": "more than 8 hours" } },
+        cats: ["Agriculture, forestry and fishing", "Industry, including construction", "Trade, transport, accommodation and food", "Information and communication", "Financial and insurance activities",
+          "Real estate, professional, scientific, technical and administrative", "Public administration and defense", "Education", "Human health and social work", "Arts, recreation and other services"],
+        weights: [8, 14, 16, 12, 8, 14, 6, 10, 8, 4],
+        phrase: "relate to {x}", lower: true, note: "Industry shows the 10 aggregated industry groups." },
       { id: "expertise", label: "Proficiency", cats: ["High", "Medium", "Low"], weights: [19, 44, 37],
         phrase: "need {x} domain expertise", lower: true, note: "Proficiency uses the low / medium / high domain expertise option." },
       { id: "language", label: "Language of Interaction", short: "Language", cats: ["Main national language", "Second national language", "Other languages"], weights: [61, 33, 6],
-        phrase: "are in the {x}", lower: true, note: "Language shows a country's two main languages plus all others." },
-      { id: "time_of_use", label: "Time of Use", cats: ["Weekday working hours", "Weekday evenings", "Weekends", "Late night"], weights: [44, 24, 22, 10],
-        phrase: "are sent {x}", words: { "Weekday working hours": "during weekday working hours", "Weekday evenings": "on weekday evenings", "Weekends": "at weekends", "Late night": "late at night" },
-        note: "Time of use categories are placeholders." }
+        phrase: "are in the {x}", lower: true, note: "Language shows a country's two main languages plus all others." }
     ],
 
     builderQuestions: [
       { id: "use_for", code: "WHY", type: "textarea", label: "Why is this combination a priority for your work?" }
     ],
 
-    // A featured combination with its own chart and questions, shown below the builder.
-    featured: {
-      id: "combo_uc_wa",
-      code: "FWC",
-      hidden: true,             // remove this line to show the section again
-      heading: "Filter Work Chats",
-      showChart: true,          // false hides the chart
-      summary: [
-        "After classifying chats by Use Case (Work/Non-work), we can:"
-      ],
-      bullets: [
-        { term: "Option 1:", text: "Classify ALL the chats by Work Activities separately." },
-        { term: "Option 2:", text: "Classify Work chats by Work Activities, Personal Use chats by Time Use Surveys and Education chats by a different taxonomy." }
-      ],
-      summaryAfter: [
-        "This means Personal Use & Educational Use will be measured by Work Activity taxonomies."
-      ],
-      chart: {
-        type: "treemap",
-        title: "Example: Personal use messages by General Work Activity, Country A",
-        note: "Only GWAs from the Interacting with Others and Work Output categories are shown.",
-        groups: [
-          { name: "Interacting with Others", items: [
-            { name: "Providing Consultation and Advice to Others", value: 14.2 },
-            { name: "Interpreting the Meaning of Information for Others", value: 11.6 },
-            { name: "Establishing and Maintaining Interpersonal Relationships", value: 9.1 },
-            { name: "Assisting and Caring for Others", value: 7.4 },
-            { name: "Training and Teaching Others", value: 6.3 },
-            { name: "Communicating with People Outside the Organization", value: 4.2 },
-            { name: "Resolving Conflicts and Negotiating with Others", value: 3.1 },
-            { name: "Selling or Influencing Others", value: 2.4 },
-            { name: "Coaching and Developing Others", value: 2.0 },
-            { name: "Communicating with Supervisors, Peers, or Subordinates", value: 1.6 },
-            { name: "Performing Administrative Activities", value: 1.4 },
-            { name: "Performing for or Working Directly with the Public", value: 0.9 },
-            { name: "Monitoring and Controlling Resources", value: 0.8 },
-            { name: "Coordinating the Work and Activities of Others", value: 0.6 },
-            { name: "Developing and Building Teams", value: 0.3 },
-            { name: "Guiding, Directing, and Motivating Subordinates", value: 0.3 },
-            { name: "Staffing Organizational Units", value: 0.2 } ] },
-          { name: "Work Output", items: [
-            { name: "Working with Computers", value: 13.8 },
-            { name: "Documenting/Recording Information", value: 9.6 },
-            { name: "Performing General Physical Activities", value: 3.1 },
-            { name: "Handling and Moving Objects", value: 2.0 },
-            { name: "Operating Vehicles, Mechanized Devices, or Equipment", value: 1.6 },
-            { name: "Repairing and Maintaining Mechanical Equipment", value: 1.4 },
-            { name: "Repairing and Maintaining Electronic Equipment", value: 1.1 },
-            { name: "Drafting, Laying Out, and Specifying Technical Devices, Parts, and Equipment", value: 0.6 },
-            { name: "Controlling Machines and Processes", value: 0.4 } ] }
-        ]
-      },
-      questions: [
-        { id: "useful", code: "Q1", type: "scale", label: "Is it useful to you to get messages broken down by use case and work activity?", options: ["Yes", "Somewhat", "No", "Not sure"] },
-        { id: "onet_sense", code: "Q2", type: "scale", label: "Does it make sense to you to use the O*NET work activity classification for personal use and education, especially in low- and middle-income countries?", options: ["Yes", "No", "Not sure"] },
-        { id: "alt_education", code: "Q3", type: "textarea", label: "If not, do you have an alternative suggestion for classifying chats that belong to the education use case?", showIf: { question: "onet_sense", equals: "No" } },
-        { id: "alt_personal", code: "Q4", type: "textarea", label: "If not, do you have an alternative suggestion for classifying chats that belong to the personal use use case?", showIf: { question: "onet_sense", equals: "No" } }
-      ]
-    }
+    // Asked once for the whole tab (not per combination). Sent as CMB_<code>.
+    questions: [
+      { id: "other_datasets", code: "Q1", type: "textarea", label: "What other datasets would you combine these indicators with?" }
+    ]
   }
 };

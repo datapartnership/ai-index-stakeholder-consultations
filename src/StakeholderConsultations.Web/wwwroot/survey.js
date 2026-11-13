@@ -45,6 +45,12 @@
     "Working with Computers": 9, "Documenting/Recording Information": 8, "Interpreting the Meaning of Information for Others": 6,
     "Providing Consultation and Advice to Others": 6, "Training and Teaching Others": 5, "Making Decisions and Solving Problems": 6,
     "Communicating with People Outside the Organization": 4, "Updating and Using Relevant Knowledge": 4 };
+  // Combination indicators with `catsFrom: "gwa"` use the 41 General Work Activities as their categories.
+  if (combosCfg) combosCfg.indicators.forEach(ind => {
+    if (ind.catsFrom !== "gwa") return;
+    ind.cats = FALLBACK_GWAS.flatMap(g => g.gwas);
+    ind.weights = ind.cats.map(n => CHAT_HEAVY[n] || 2);
+  });
 
   // ---------- state ----------
   const activeIndicator = {};
@@ -209,6 +215,14 @@
   let fitTimer = null;
   window.addEventListener("resize", () => { clearTimeout(fitTimer); fitTimer = setTimeout(fitBarLabels, 100); });
 
+  function renderTable(t) {
+    if (!t) return null;
+    const hdr = t.rowHeader == null ? 1 : t.rowHeader;
+    return el("div", { class: "table-scroll" }, [el("table", { class: "ex tax-table" + (hdr === 0 ? " row-first" : "") }, [
+      el("thead", null, [el("tr", null, t.columns.map(c => el("th", { scope: "col", text: c })))]),
+      el("tbody", null, t.rows.map(r => el("tr", null, r.map((c, i) => el(i === hdr ? "th" : "td", i === hdr ? { scope: "row", text: c } : { text: c })))))])]);
+  }
+
   function renderPillGroup(g) {
     const card = el("section", { class: "pill-group" });
     if (g.title) card.appendChild(el("h3", { text: g.title }));
@@ -220,6 +234,7 @@
         return el("li", { class: "pill" }, [item.code ? el("b", { class: "pill-code", text: item.code }) : null, el("span", { text: item.label })]);
       })));
     });
+    if (g.table) card.appendChild(renderTable(g.table));
     return card;
   }
 
@@ -257,7 +272,8 @@
       const cats = buildActivityModel(data);
       const counts = data ? data.counts : { gwa: 41, iwa: 332 };
 
-      const levels = [["gwa", "GWA"], ["iwa", "IWA"], ["dwa", "DWA"], ["task", "Task"]];
+      const allLevels = [["gwa", "GWA"], ["iwa", "IWA"], ["dwa", "DWA"], ["task", "Task"]];
+      const levels = allLevels.filter(([k]) => !opts.levels || opts.levels.includes(k));
       const bar = el("div", { class: "lvl-pills", role: "group", "aria-label": "Level of detail" });
       levels.forEach(([k, label]) => {
         const b = el("button", { type: "button", "aria-pressed": k === mode ? "true" : "false", text: label });
@@ -379,14 +395,11 @@
         p.append(s.definition.slice(0, at), el("mark", { class: "hl hl-a", text: hl }), s.definition.slice(at + hl.length));
         return p;
       };
-      if (s.definition) dte.appendChild(sec("Definition", [defP(), maybeCollapsed(s.definitionList, s.definitionListSummary)]));
+      if (s.definition) dte.appendChild(sec("Definition", [defP(), renderTable(s.definitionTable), maybeCollapsed(s.definitionList, s.definitionListSummary)]));
       if (s.taxonomy || s.pillGroups || s.taxonomyList || s.taxonomyTable || s.taxonomyBullets) {
-        const tbl = t => !t ? null : el("div", { class: "table-scroll" }, [el("table", { class: "ex tax-table" }, [
-          el("thead", null, [el("tr", null, t.columns.map(c => el("th", { scope: "col", text: c })))]),
-          el("tbody", null, t.rows.map(r => el("tr", null, r.map((c, i) => el(i === 1 ? "th" : "td", i === 1 ? { scope: "row", text: c } : { text: c })))))])]);
         const bulletList = list => el("ul", { class: "tax-bullets" }, list.map(b => el("li", null, [el("b", { text: b.term }), b.text ? document.createTextNode(" " + b.text) : null, b.sub ? bulletList(b.sub) : null])));
         const bullets = s.taxonomyBullets ? bulletList(s.taxonomyBullets) : null;
-        dte.appendChild(sec("Taxonomy", [s.taxonomy ? el("p", { text: s.taxonomy }) : null, bullets, maybeCollapsed(s.taxonomyList, s.taxonomyListSummary), tbl(s.taxonomyTable)]
+        dte.appendChild(sec("Taxonomy", [s.taxonomy ? el("p", { text: s.taxonomy }) : null, bullets, maybeCollapsed(s.taxonomyList, s.taxonomyListSummary), renderTable(s.taxonomyTable)]
           .concat((s.pillGroups || []).map(renderPillGroup))));
       }
       const ex = s.example || {};
@@ -619,16 +632,24 @@
     prioCard.appendChild(prioList);
     right.appendChild(bq);
     right.appendChild(prioCard);
+    if ((combosCfg.questions || []).length) {
+      const extra = el("div", { class: "card" });
+      combosCfg.questions.forEach(q => extra.appendChild(renderQuestion(q, "combos__", { indicatorId: null, codePrefix: "CMB" })));
+      right.appendChild(extra);
+    }
     section.appendChild(builder);
 
     function drawPills() {
       pillRow.innerHTML = "";
       const max = combosCfg.max || Infinity;
+      const groups = combosCfg.exclusiveGroups || [];
+      // An indicator is blocked when another member of its exclusive group is already selected.
+      const blockedBy = ind => { for (const g of groups) if (g.includes(ind.id)) { const o = g.find(id => id !== ind.id && combo.sel.includes(id)); if (o) return comboInd(o); } return null; };
       combosCfg.indicators.forEach(ind => {
         const pos = combo.sel.indexOf(ind.id);
-        const on = pos >= 0, full = combo.sel.length >= max;
+        const on = pos >= 0, full = combo.sel.length >= max, blocker = !on ? blockedBy(ind) : null;
         const b = el("button", { type: "button", class: "ipill" + (on ? " on" : ""), "aria-pressed": on ? "true" : "false",
-          disabled: ind.disabled || (!on && full) ? true : null, title: ind.disabled ? ind.disabledNote : null,
+          disabled: ind.disabled || (!on && (full || blocker)) ? true : null, title: ind.disabled ? ind.disabledNote : (blocker ? `Can't be combined with ${blocker.label}` : null),
           style: on ? `--indicator-color:${COMBO_COLORS[pos % COMBO_COLORS.length]}` : null }, [
           el("span", { class: "n", "aria-hidden": "true", text: on ? String(pos + 1) : "" }), el("span", { text: ind.label }),
           on ? el("span", { class: "sr-only", text: `, position ${pos + 1}` }) : null]);
@@ -641,8 +662,9 @@
         pillRow.appendChild(b);
       });
       const dis = combosCfg.indicators.filter(x => x.disabled).map(x => `${x.label}: ${x.disabledNote}`).join(" ");
+      const exNote = groups.map(g => g.map(id => (comboInd(id) || {}).label).filter(Boolean).join(", ")).filter(Boolean).map(s => `${s} can't be combined with each other.`).join(" ");
       pickStatus.textContent = (combo.sel.length ? `Selected: ${comboName(combo.sel)}.` : "No indicators selected yet.") +
-        (combo.sel.length >= max ? ` That's the maximum of ${max}; remove one to pick another.` : "") + (dis ? " " + dis : "");
+        (combo.sel.length >= max ? ` That's the maximum of ${max}; remove one to pick another.` : "") + (exNote ? " " + exNote : "") + (dis ? " " + dis : "");
     }
 
     function drawChart() {
@@ -735,15 +757,17 @@
     return section;
   }
 
+  const VIEWS = ["single", "combos"];
+  const viewHash = v => (v === "combos" ? "#combinations" : "#" + (activeIndicator.id || ""));
   function setView(v, updateHash) {
     view = v;
-    $("#view_single").hidden = v !== "single";
-    $("#view_combos").hidden = v !== "combos";
-    [["vt_single", "single"], ["vt_combos", "combos"]].forEach(([id, k]) => {
-      const t = document.getElementById(id); t.setAttribute("aria-selected", k === v ? "true" : "false"); t.tabIndex = k === v ? 0 : -1;
+    VIEWS.forEach(k => { const s = document.getElementById("view_" + k); if (s) s.hidden = k !== v; });
+    VIEWS.forEach(k => {
+      const t = document.getElementById("vt_" + k); if (!t) return;
+      t.setAttribute("aria-selected", k === v ? "true" : "false"); t.tabIndex = k === v ? 0 : -1;
     });
     fitBarLabels();
-    if (updateHash) { try { history.replaceState(null, "", v === "combos" ? "#combinations" : "#" + (activeIndicator.id || "")); } catch (e) {} scheduleSave(); }
+    if (updateHash) { try { history.replaceState(null, "", viewHash(v)); } catch (e) {} scheduleSave(); }
   }
 
   // ---------- page ----------
@@ -761,17 +785,18 @@
       cfg.aboutQuestions.forEach(q => about.appendChild(renderQuestion(q, "about__", { indicatorId: null, codePrefix: "RSP" })));
       form.appendChild(about);
     }
-    if (combosCfg) {
+    const views = ["single"].concat(combosCfg ? ["combos"] : []);
+    if (views.length > 1) {
+      const labels = { single: cfg.individualTabLabel || "Individual indicators", combos: cfg.combinedTabLabel || "Combined indicators" };
       const tabs = el("div", { class: "view-tabs", role: "tablist", "aria-label": "Survey sections" });
-      [["vt_single", cfg.individualTabLabel || "Individual indicators", "single", "view_single"], ["vt_combos", cfg.combinedTabLabel || "Combined indicators", "combos", "view_combos"]].forEach(([id, label, k, ctl]) => {
-        const b = el("button", { type: "button", role: "tab", id, "aria-controls": ctl, "aria-selected": "false", tabindex: "-1", text: label });
+      views.forEach(k => {
+        const b = el("button", { type: "button", role: "tab", id: "vt_" + k, "aria-controls": "view_" + k, "aria-selected": "false", tabindex: "-1", text: labels[k] });
         b.addEventListener("click", () => setView(k, true));
         tabs.appendChild(b);
       });
       tabs.addEventListener("keydown", e => {
         if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
         e.preventDefault();
-        const views = ["single", "combos"];
         const offset = e.key === "ArrowRight" ? 1 : -1;
         const nv = views[(views.indexOf(view) + offset + views.length) % views.length];
         setView(nv, true); document.getElementById("vt_" + nv).focus();
@@ -804,10 +829,10 @@
     if (draft) restoreDraft(draft);
     if (combosView._redraw) combosView._redraw();
     refresh();
-    let v0 = draft && ["single", "combos"].includes(draft.view) ? draft.view : "single";
-    if (hash === "combinations") v0 = "combos";
+    let v0 = draft && views.includes(draft.view) ? draft.view : "single";
+    if (hash === "combinations" && combosCfg) v0 = "combos";
     else if (ids.includes(hash)) v0 = "single";
-    if (combosCfg) setView(v0, false);
+    if (views.length > 1) setView(v0, false);
   }
 
   // ---------- drafts ----------

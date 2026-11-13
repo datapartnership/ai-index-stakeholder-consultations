@@ -549,3 +549,4 @@ table.tax-table th[scope="row"] { font-weight: 600; text-align: left; background
 table.tax-table td { vertical-align: top; }
 table.tax-table td:first-child { white-space: nowrap; color: var(--text-secondary); }
 table.tax-table td:nth-child(3) { color: var(--text-secondary); min-width: 64px; }
+table.tax-table.row-first td { color: inherit; min-width: 0; white-space: pre-line; }

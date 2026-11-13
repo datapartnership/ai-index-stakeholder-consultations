@@ -1,8 +1,20 @@
 
 # Raw O*NET download and CSV export: not needed by the page.
-# Keep data/onet_activities.json and data/soc_tasks.json; the published survey loads them.
+# Browser JSON lives in src/StakeholderConsultations.Web/wwwroot/data/.
 data/db_31_0_excel/
 data/soc_tasks.csv
 
+# .NET build output, local settings, and test artifacts.
+**/bin/
+**/obj/
+artifacts/
+TestResults/
+.vs/
+*.user
+*.suo
+.env
+appsettings.Local.json
+
 # Exported survey responses (respondents' answers)
 survey-responses*.csv
+nuget.config

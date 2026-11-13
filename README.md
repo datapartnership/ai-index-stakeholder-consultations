@@ -1,88 +1,69 @@
 # Stakeholder Consultations
 
-A static web survey that asks stakeholders which AI-use indicators matter most, and how they should be measured. It opens with a short scrolling story, then has two tabs: **Individual indicators** and **Combined indicators**.
+An ASP.NET Core 10 application hosting the AI Index stakeholder survey and its backend on the same origin. The existing frontend is plain HTML, CSS, and JavaScript, with no frontend build step. Responses are stored in Azure SQL (or SQL Server) and can be downloaded through a protected CSV endpoint.
 
-The front end is plain HTML, CSS and JavaScript, with no build step. Responses are sent as JSON to a backend endpoint; for production, that backend runs on **Azure App Service**.
+## Project layout
 
-## Files
+- `src/StakeholderConsultations.Web/`: the `net10.0` application, API, EF Core model, and migrations.
+- `src/StakeholderConsultations.Web/wwwroot/`: the public survey (`index.html`, `style.css`, `questions.js`, `survey.js`, `charts.js`, `story.js`) and O*NET JSON data.
+- `tests/StakeholderConsultations.Web.Tests/`: API, validation, CSV, hosting, and optional real SQL integration tests.
+- `build_onet_data.py`: rebuilds browser data from an O*NET database download. JSON defaults to `wwwroot/data/`; CSV defaults to the non-public `data/soc_tasks.csv`. Override with `--out <json-directory>` and `--csv-out <csv-file>`.
+- `worker.js`: historical Cloudflare reference only; it is not used by this application.
 
-| File | What it does |
-| --- | --- |
-| `index.html` | Page shell and the scrolling story text |
-| `questions.js` | **All survey content**: indicators, taxonomies, questions, question codes, endpoint URL |
-| `survey.js` | Survey engine: renders questions, validates, builds and sends the response |
-| `charts.js` | Charts (donut, split bar, treemap, small multiples) |
-| `story.js` | Scrolling story: pinning, slide changes and arrows |
-| `style.css` | All styling |
-| `data/` | O*NET data used by the Work Activity explorer (`onet_activities.json`, `soc_tasks.json`) |
-| `build_onet_data.py` | Rebuilds the `data/` files from an O*NET database download |
-| `worker.js` | Reference backend for Cloudflare Workers + D1; use it as the spec for the Azure backend |
+Only `wwwroot/` is served publicly. Repository documents, archives, raw data, reference code, and application configuration are outside it. Edit `wwwroot/questions.js` to change survey content; preserve existing question codes once responses exist.
 
-To change wording or questions, edit `questions.js` only.
+## Run locally
 
-<!-- ## Run locally
+Requirements: the .NET 10 SDK and a reachable SQL Server or Azure SQL database. On macOS, use a remote SQL Server/Azure SQL database; Windows LocalDB connection strings do not work on macOS.
+
+From the repository root:
 
 ```sh
-python3 -m http.server 8000
+dotnet restore
+dotnet tool restore
+
+dotnet user-secrets set "ConnectionStrings:SurveyDatabase" '<your SQL Server or Azure SQL connection string>' --project src/StakeholderConsultations.Web
+dotnet user-secrets set "Survey:ExportKey" '<a long random export secret>' --project src/StakeholderConsultations.Web
+dotnet user-secrets set "Survey:AccessPassword" '<the password you share with stakeholders>' --project src/StakeholderConsultations.Web
+
+dotnet run --project src/StakeholderConsultations.Web
 ```
 
-Then open http://localhost:8000. The page must be served over HTTP, not opened as a file, because the O*NET data is loaded with `fetch`.
+Open <http://localhost:5080>. The frontend submits directly to `/api/responses`; no separate frontend server or CORS configuration is needed. User secrets are loaded in Development. Environment-variable equivalents are `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey` and `Survey__AccessPassword`. Do not commit credentials or pass them as URL parameters.
 
-While `endpointUrl` in `questions.js` is still `PASTE_YOUR_ENDPOINT_URL_HERE`, the survey runs in **test mode**: nothing is sent, and **Submit feedback** shows the exact JSON that would be sent. There is no on-page banner for this, so check `endpointUrl` before going live. -->
+## Survey password
 
-## Deploy on Azure App Service
+When `Survey:AccessPassword` (env var `Survey__AccessPassword`) is set, the survey is password-protected:
 
-### 1. Host the front end
+- Visitors without access are redirected to `/login`, a small page that asks for the shared password. This covers the page, its scripts and styles, and the `data/*.json` files.
+- The correct password sets an `HttpOnly`, `SameSite=Lax` cookie (`Secure` over HTTPS) that lasts 30 days, then sends the visitor to the survey.
+- `/api/responses` returns `401` with `{ "ok": false, "error": "Password required" }` without the cookie.
+- `/api/export` isn't affected; it still uses only `X-Export-Key`.
+- Login attempts are limited to 20 per minute per client IP; extra attempts get `429`.
+- The cookie is derived from the password, so it keeps working across restarts and instances. **Changing the password signs everyone out**; they need the new password to continue.
+- If the setting is empty or missing, the survey is public and startup logs a warning.
 
-The front end is static files: `index.html`, `*.js`, `style.css`, `web.config` and `data/`. Deploy them to the web app's `wwwroot` with zip deploy, GitHub Actions or the VS Code Azure extension.
+When `ConnectionStrings:SurveyDatabase` is configured, the application applies pending EF Core migrations at startup before accepting requests. On the first run, this creates the `Responses` table, its index, and the EF migration history. Later starts apply only pending migrations and preserve existing responses. The database account must have permission to create and update the schema. If the configured database is unavailable or a migration fails, startup fails so the container can report the problem and be restarted after it is resolved.
 
-- **`data/onet_activities.json` and `data/soc_tasks.json` must be deployed.** Without them, only the 41 GWAs appear (a built-in fallback), and the IWA view stays empty. Both files are committed to the repository; `.gitignore` only excludes the raw O*NET download and the CSV.
-- **Windows App Service:** IIS serves the static files. `web.config` makes sure IIS serves `.json` files.
-- **Linux App Service (Node runtime):** set the startup command to `pm2 serve /home/site/wwwroot --no-daemon`. `web.config` is ignored there.
-- Do **not** deploy `worker.js`, `build_onet_data.py`, `data/db_31_0_excel/` or `data/soc_tasks.csv`. They aren't needed by the page.
-- **Check after publishing:** open `https://<your-app>/data/onet_activities.json` in a browser. It should show JSON, not a 404 error.
+Without a connection string, startup skips migrations and the homepage remains available; submissions and authorized exports return `503` until SQL is configured.
 
-Azure Static Web Apps is a lighter alternative if the backend is hosted separately.
+## Backend contract
 
-### 2. Point the survey at the backend
+`POST /api/responses` accepts UTF-8 JSON with `Content-Type: text/plain` (the existing browser format) or `application/json`, including a charset parameter.
 
-In `questions.js`, set:
+- The body must be a flat JSON object with 1–120 fields, at most 20,000 UTF-8 bytes, including requests without a Content-Length header.
+- Field names must match `^[A-Za-z0-9_]{1,64}$`. Duplicate keys are rejected. Values may be strings (at most 5,000 UTF-16 code units), numbers, booleans, or null; objects and arrays are rejected.
+- Browser requests must have the application's own origin. Requests without an Origin header are accepted. Foreign or malformed origins return `403`; cross-origin access is not enabled.
+- Successful persistence returns `200` with `{ "ok": true }`. Failures return `{ "ok": false, "error": "..." }`: `400` for invalid JSON/fields, `413` for oversized bodies, `415` for unsupported media types, `401` when the survey password is enabled and the access cookie is missing, and `503` for storage failures.
+- Responses contain a server-generated GUID, server UTC receipt timestamp, and the answers in an `nvarchar(max)` JSON column. Submitted `responseId` and `receivedAt` fields are discarded; client `submittedAt` is retained as an answer. New question codes need no database migration.
+- No visitor IP addresses, user agents, request bodies, or export credentials are recorded by application logging. SQL sensitive-data logging is not enabled. Azure/platform access logging is configured separately.
+- The frontend retains answers on the page after a failed request so the respondent can retry. Each successful POST creates a new response; retries are not deduplicated.
 
-```js
-endpointUrl: "https://<your-app>.azurewebsites.net/api/responses",
-```
-
-If the backend is in the same App Service as the front end, a relative path such as `"/api/responses"` works, and no CORS setup is needed.
-
-### 3. Backend contract
-
-The survey sends **one request per submission**:
-
-- **Method:** `POST`
-- **Header:** `Content-Type: text/plain`. This keeps it a "simple" request, so browsers send no CORS preflight.
-- **Body:** a flat JSON object. Every value is a string, and every key is a question code (see below).
-- **Success:** any `2xx` status. Anything else shows an error, and the respondent can retry; their answers stay on the page.
-
-Recommended backend behaviour, matching `worker.js`:
-
-| Rule | Value |
-| --- | --- |
-| Allowed origin (CORS) | Only the survey's own origin |
-| Max request size | 20,000 bytes |
-| Max number of fields | 120 (the survey currently sends 32) |
-| Max length per value | 5,000 characters |
-| Key format | `^[A-Za-z0-9_]{1,64}$`; reject anything else |
-| Values | String, number, boolean or null only |
-| Stored per response | Server-generated id, server timestamp, and the answers. No IP addresses or user agents |
-| CSV/Excel export | Prefix values starting with `= + - @` with `'` so spreadsheets don't run them as formulas |
-
-Store answers so that new codes need no schema change: for example, a JSON column in Azure SQL, or one document per response in Cosmos DB / Table Storage.
-
-### Example request body
+Example body:
 
 ```json
 {
-  "responseId": "3f1c…",
+  "responseId": "client-generated-id",
   "submittedAt": "2026-11-02T10:15:00.000Z",
   "surveyVersion": "2026-11",
   "USE_REL": "Yes",
@@ -91,6 +72,94 @@ Store answers so that new codes need no schema change: for example, a JSON colum
   "CMB_P1_WHY": "…"
 }
 ```
+
+## Download responses
+
+`GET /api/export` requires the configured secret in the `X-Export-Key` header. With your secret already available in a shell variable:
+
+```sh
+curl --fail --header "X-Export-Key: $SURVEY_EXPORT_KEY" \
+  http://localhost:5080/api/export --output survey-responses.csv
+```
+
+An unset/blank server export key disables the endpoint with `503`; missing or incorrect credentials return `401`. Query-string keys are not accepted. All export responses have `Cache-Control: no-store`.
+
+The download is UTF-8 CSV with a BOM and CRLF record separators, named `survey-responses.csv`. Columns start with authoritative `responseId` and `receivedAt`, followed by every observed answer field in first-seen order. Responses are ordered by receipt time, then ID. Missing/null values are empty cells. Quotes, commas, newlines, and Unicode are preserved; strings beginning with spreadsheet formula characters or tab/newline controls are prefixed with an apostrophe (including formulas after leading whitespace). Numeric values remain numeric. An empty database exports just the metadata header.
+
+The export assembles all responses in memory; it is intended for this consultation survey's response volume.
+
+## Test and publish
+
+```sh
+dotnet test
+dotnet publish src/StakeholderConsultations.Web -c Release -o artifacts/publish
+```
+
+API/CSV/hosting tests run without a database using a test response store. The real SQL integration test is skipped unless `SURVEY_TEST_SQL_CONNECTION` is set to a **dedicated test database**. When set, it verifies automatic startup migration, posts a uniquely marked response through the real SQL store, checks persistence/export, restarts the app to verify existing data is preserved, and deletes only that test response. Database provisioning is not included.
+
+Startup handles schema migration automatically. To review the SQL or apply migrations manually before startup, optionally generate an idempotent migration script:
+
+```sh
+mkdir -p artifacts
+dotnet ef migrations script --idempotent --project src/StakeholderConsultations.Web --startup-project src/StakeholderConsultations.Web --output artifacts/migrations.sql
+```
+
+If applying the script manually, startup will recognize the recorded migrations and skip them. The runtime account needs schema migration permissions in addition to read/insert access to the Responses table. Never point integration tests at production.
+
+## Docker
+
+Build from the repository root:
+
+```sh
+docker build --pull -t stakeholder-consultations:local .
+docker run --rm --name stakeholder-consultations -p 8080:8080 \
+  -e ConnectionStrings__SurveyDatabase -e Survey__ExportKey -e Survey__AccessPassword \
+  stakeholder-consultations:local
+```
+
+Open <http://localhost:8080>. The image serves both the frontend and API, runs as the .NET image's non-root user, and listens on container port `8080`. The SDK is used only in the build stage; the final image contains the ASP.NET Core runtime and published application.
+
+Set `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey` and `Survey__AccessPassword` in your shell or deployment platform before running the container. The `-e NAME` options forward those environment variables without embedding their values in the image. The database must be reachable from inside the container; `localhost` refers to the container itself. The container automatically creates or updates the schema at startup using the configured database account, which must have schema migration permissions. Without SQL configuration, the frontend still loads and submissions return `503`.
+
+The Docker build context includes only the web project, excluding local build output, local settings, credential files, documents, and raw O*NET downloads. Both browser JSON datasets are included in the image.
+
+## GitHub Container Registry
+
+The workflow in `.github/workflows/container.yml` tests the application before building Linux AMD64 and ARM64 images. It publishes to:
+
+```text
+ghcr.io/datapartnership/ai-index-stakeholder-consultations
+```
+
+- Pushes to `main` publish `main`, `latest`, and `sha-<full-commit-SHA>` tags. `latest` is reserved for the repository's default branch.
+- Pushes to `deployment` publish `deployment` and the commit SHA tag.
+- Version tags such as `v1.2.3` publish `1.2.3`, `1.2`, and the commit SHA tag.
+- Pull requests targeting either branch test and build the image without logging in to GHCR or publishing.
+- The workflow can also be run manually from GitHub Actions for a selected branch or tag.
+
+Authentication uses the automatically supplied `GITHUB_TOKEN` with `packages: write`; no personal access token or extra publishing secret is required. The image name is derived from the repository and normalized to lowercase, so forks publish under their own namespace. If a GHCR package already exists, grant this repository Actions write access in that package's settings. Package visibility is managed in GHCR.
+
+Once the workflow has published an image:
+
+```sh
+docker pull ghcr.io/datapartnership/ai-index-stakeholder-consultations:latest
+docker run --rm -p 8080:8080 \
+  -e ConnectionStrings__SurveyDatabase -e Survey__ExportKey -e Survey__AccessPassword \
+  ghcr.io/datapartnership/ai-index-stakeholder-consultations:latest
+```
+
+Authenticate with `docker login ghcr.io` first when pulling a private package. Image publication does not deploy the app or contact the database; schema migration runs when the deployed container starts.
+
+## Azure App Service
+
+1. Use a .NET 10 Azure App Service on Windows or Linux and an existing Azure SQL database reachable from that app.
+2. Configure `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey` and `Survey__AccessPassword` as App Service environment settings. Set `ASPNETCORE_ENVIRONMENT=Production`, enable HTTPS Only, and set `AllowedHosts` to the app hostname (semicolon-separated if using multiple domains).
+3. For Linux App Service HTTPS proxy termination, set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` in the managed App Service environment so the application sees the external HTTPS scheme for same-origin checks. Windows/IIS uses ASP.NET Core's IIS integration. If hosting behind a different proxy, explicitly configure trusted forwarding for that environment.
+4. Deploy the **contents** of `artifacts/publish/` as one app, including the DLLs, configuration, and `wwwroot/`. The app applies pending database migrations on startup, so its configured database account needs schema migration permissions. Linux startup is `dotnet StakeholderConsultations.Web.dll`; it must not use the previous Node/PM2 static-server command.
+5. For Windows/IIS, use the `web.config` generated by `dotnet publish`. The old static-only repository `web.config` has been removed.
+6. Check `/`, `/style.css`, `/survey.js`, `/data/onet_activities.json`, and `/data/soc_tasks.json`. Submit a test response, confirm it appears in the protected export, and verify `/appsettings.json`, `/worker.js`, and unknown routes return `404`.
+
+This repository change does not provision cloud resources, deploy the app, or import existing Cloudflare responses.
 
 ## Question codes
 
@@ -108,7 +177,7 @@ Every indicator and every question in `questions.js` has a `code`. Each answer i
 
 | Code | Indicator |
 | --- | --- |
-| `RSP` | About the respondent (top of the survey, `aboutQuestions` in `questions.js`) |
+| `RSP` | About the respondent (top of the survey, `aboutQuestions` in `wwwroot/questions.js`) |
 | `USE` | Use Case |
 | `ACT` | Work Activities |
 | `OCC` | Occupational Topic |
@@ -157,5 +226,5 @@ Up to 5 priorities can be added (`maxPriorities` in `questions.js`). Unused slot
 ## Other notes
 
 - **Spam protection:** a hidden "Leave this field empty" input. If a bot fills it in, the page shows "thank you" but sends nothing.
-- **Drafts:** answers in progress are kept in the browser's `localStorage` on the respondent's own device, and cleared after a successful submit. They are never sent anywhere until **Submit feedback** is pressed.
+- **Answers in progress:** kept in memory only, never in browser storage. Closing or reloading the page clears them. Nothing is sent until **Submit feedback** is pressed.
 - **O*NET data:** to rebuild `data/` for a new O*NET release, run `python3 build_onet_data.py <folder-or-zip> --release "31.0" --date "August 2026"`.

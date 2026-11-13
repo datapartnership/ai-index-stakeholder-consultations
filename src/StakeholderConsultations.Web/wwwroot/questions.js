@@ -4,7 +4,7 @@
   Edit this file to change the survey text and questions. You never need to touch
   index.html, style.css, charts.js or survey.js.
 
-  endpointUrl  – where responses are sent (e.g. your Cloudflare Worker URL).
+  endpointUrl  – where responses are sent (the ASP.NET backend uses /api/responses).
                  While it is left as the placeholder, the page runs in TEST MODE:
                  nothing is sent, and the data that *would* be sent is shown on screen.
 
@@ -43,7 +43,7 @@ window.SURVEY_CONFIG = {
   siteTitle: "AI Index stakeholder consultation",
   surveyVersion: "2026-11-6",   // sent with every response; bump when questions change
 
-  endpointUrl: "PASTE_YOUR_ENDPOINT_URL_HERE",
+  endpointUrl: "/api/responses",
 
   submitLabel: "Submit feedback",
   thankYouTitle: "Thank you for your feedback",

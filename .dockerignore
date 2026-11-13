@@ -1,0 +1,18 @@
+# Send only the web project to the builder; omit repository documents and raw data.
+**
+!src/
+!src/StakeholderConsultations.Web/
+!src/StakeholderConsultations.Web/**
+
+# Never copy host build output or local credentials into a build layer.
+**/bin
+**/obj
+**/Properties
+**/.env*
+**/appsettings.Local.json
+**/*.user
+**/*.suo
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key

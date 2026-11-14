@@ -65,6 +65,60 @@ public sealed class SurveyEndpointTests
     }
 
     [Theory]
+    [InlineData("https://pages.example", "https://pages.example")]
+    [InlineData("https://PAGES.example", "https://pages.example/repo/")]
+    [InlineData("https://second.example", "https://pages.example, https://second.example")]
+    public async Task AcceptsConfiguredFrontendOriginWithCorsHeaders(string origin, string allowedOrigins)
+    {
+        await using var factory = new SurveyApplicationFactory(allowedOrigins: allowedOrigins);
+        using var client = factory.CreateSurveyClient();
+        client.DefaultRequestHeaders.Add("Origin", origin);
+        using var response = await client.PostAsync("/api/responses", new StringContent("{\"Q\":1}"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(origin, Assert.Single(response.Headers.GetValues("Access-Control-Allow-Origin")));
+        Assert.False(response.Headers.Contains("Access-Control-Allow-Credentials"));
+        Assert.Single(factory.Store.Responses);
+    }
+
+    [Fact]
+    public async Task AnswersPreflightFromConfiguredOrigin()
+    {
+        await using var factory = new SurveyApplicationFactory(accessPassword: "secret", allowedOrigins: "https://pages.example");
+        using var client = factory.CreateSurveyClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/api/responses");
+        request.Headers.Add("Origin", "https://pages.example");
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        request.Headers.Add("Access-Control-Request-Headers", "authorization,content-type");
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal("https://pages.example", Assert.Single(response.Headers.GetValues("Access-Control-Allow-Origin")));
+        var allowedHeaders = string.Join(",", response.Headers.GetValues("Access-Control-Allow-Headers"));
+        Assert.Contains("Authorization", allowedHeaders, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task IgnoresPreflightFromUnconfiguredOrigin()
+    {
+        await using var factory = new SurveyApplicationFactory(allowedOrigins: "https://pages.example");
+        using var client = factory.CreateSurveyClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/api/responses");
+        request.Headers.Add("Origin", "https://other.test");
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        using var response = await client.SendAsync(request);
+        Assert.False(response.Headers.Contains("Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task RootReportsApiStatus()
+    {
+        await using var factory = new SurveyApplicationFactory();
+        using var client = factory.CreateSurveyClient();
+        using var response = await client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("ok").GetBoolean());
+    }
+
+    [Theory]
     [InlineData(false, 20000, HttpStatusCode.OK)]
     [InlineData(false, 20001, HttpStatusCode.RequestEntityTooLarge)]
     [InlineData(true, 20000, HttpStatusCode.OK)]
@@ -195,21 +249,10 @@ public sealed class SurveyEndpointTests
     }
 
     [Theory]
-    [InlineData("/", "text/html")]
-    [InlineData("/style.css", "text/css")]
-    [InlineData("/survey.js", "text/javascript")]
-    [InlineData("/data/onet_activities.json", "application/json")]
-    [InlineData("/data/soc_tasks.json", "application/json")]
-    public async Task ServesFrontendAssets(string path, string contentType)
-    {
-        await using var factory = new SurveyApplicationFactory();
-        using var client = factory.CreateSurveyClient();
-        using var response = await client.GetAsync(path);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(contentType, response.Content.Headers.ContentType?.MediaType);
-    }
-
-    [Theory]
+    [InlineData("/index.html")]
+    [InlineData("/style.css")]
+    [InlineData("/survey.js")]
+    [InlineData("/data/onet_activities.json")]
     [InlineData("/worker.js")]
     [InlineData("/appsettings.json")]
     [InlineData("/Archive.zip")]

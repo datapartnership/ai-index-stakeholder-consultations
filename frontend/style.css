@@ -293,12 +293,12 @@ table.ex .num { text-align: right; font-weight: 700; white-space: nowrap; }
 .q-label + .q-body { margin-top: 8px; }
 .req { color: var(--error-text); margin-left: 2px; }
 
-textarea, input[type=text], input[type=email], input[type=number] {
+textarea, input[type=text], input[type=email], input[type=number], input[type=password] {
   width: 100%; padding: 8px 12px; font: 400 14px/21px var(--font-ui); color: var(--text-primary);
   border: 1px solid var(--border-control); border-radius: var(--radius-md); background: #fff;
 }
 textarea { min-height: 120px; resize: vertical; }
-textarea:focus, input[type=text]:focus, input[type=email]:focus, input[type=number]:focus { outline: 2px solid var(--focus-light); outline-offset: 0; border-color: var(--focus-light); }
+textarea:focus, input[type=text]:focus, input[type=email]:focus, input[type=number]:focus, input[type=password]:focus { outline: 2px solid var(--focus-light); outline-offset: 0; border-color: var(--focus-light); }
 
 .scale { display: flex; flex-wrap: wrap; gap: 8px; }
 .scale label { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 88px; min-height: 40px; padding: 8px 16px;
@@ -333,6 +333,10 @@ textarea:focus, input[type=text]:focus, input[type=email]:focus, input[type=numb
 .done { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 760px; }
 .done h2 { font: 500 28px/34px var(--font-display); color: var(--navy); }
 .done p { font-size: 16px; line-height: 24px; color: var(--text-secondary); }
+.access-form { max-width: 420px; }
+.access-form label { font-weight: 600; font-size: 14px; }
+.access-form input { width: 100%; }
+.access-form .form-error { text-align: left; }
 .done pre { width: 100%; background: var(--bg-subtle); border-radius: var(--radius-md); padding: 16px; overflow: auto; max-height: 60vh; font-size: 13px; line-height: 18px; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
 

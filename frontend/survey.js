@@ -22,6 +22,8 @@
   const combosCfg = cfg.combinations || null;
   const endpoint = cfg.endpointUrl || cfg.flowUrl || "";
   const testMode = !endpoint || /PASTE_YOUR_/.test(endpoint);
+  const API_BASE = (window.SURVEY_API_BASE || "").replace(/\/+$/, "");
+  const TOKEN_KEY = "survey-access-token";
   const COUNTRY = cfg.country || "Country A";
   const NOTE = cfg.illustrativeNote || "Illustrative figures for an example country. Not real data.";
 
@@ -87,6 +89,15 @@
     if (action === "set") memoryDraft = value;
     if (action === "clear") memoryDraft = null;
     return null;
+  }
+
+  // Shared-password token from POST /api/login, sent as a bearer header with each submission.
+  function accessToken(value) {
+    try {
+      if (value === undefined) return localStorage.getItem(TOKEN_KEY) || "";
+      if (value) localStorage.setItem(TOKEN_KEY, value); else localStorage.removeItem(TOKEN_KEY);
+    } catch (e) { /* storage unavailable: the prompt appears again on the next visit */ }
+    return value || "";
   }
 
   const dataCache = {};
@@ -938,7 +949,16 @@
     const btn = $("#submitBtn");
     btn.disabled = true; btn.textContent = "Submitting…";
     try {
-      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(payload) });
+      const headers = { "Content-Type": "text/plain" };
+      const token = accessToken();
+      if (token) headers.Authorization = "Bearer " + token;
+      const res = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(payload) });
+      if (res.status === 401) {
+        accessToken(null);
+        flushSave();
+        showLogin("Please enter the survey password to submit. Your answers are kept and will reappear afterwards.");
+        return;
+      }
       if (!res.ok) throw new Error("HTTP " + res.status);
       storage("clear");
       showDone();
@@ -970,7 +990,46 @@
     window.scrollTo(0, 0);
   }
 
-  render();
+  function showLogin(message) {
+    app.innerHTML = "";
+    const input = el("input", { type: "password", id: "accessPassword", name: "password", autocomplete: "current-password", required: true });
+    const error = el("p", { class: "form-error", role: "alert", text: message || "" });
+    const button = el("button", { type: "submit", class: "btn btn-primary", text: "Continue" });
+    const form = el("form", { class: "done access-form" }, [
+      el("h2", { text: cfg.siteTitle || "Survey" }),
+      el("p", { text: "Please enter the password you received with your invitation." }),
+      el("label", { for: "accessPassword", text: "Password" }), input, error, button]);
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      error.textContent = "";
+      button.disabled = true;
+      try {
+        const res = await fetch(API_BASE + "/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: input.value }) });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && body.ok) { accessToken(body.token); render(); return; }
+        error.textContent = body.error || (res.status === 429 ? "Too many attempts. Please wait a minute and try again." : "Could not check the password. Please try again.");
+      } catch (err) {
+        error.textContent = "Could not reach the survey server. Check your internet connection and try again.";
+      }
+      button.disabled = false;
+      input.focus();
+    });
+    app.appendChild(form);
+    input.focus({ preventScroll: true });
+  }
+
+  // Ask for the shared password up front when the API requires one.
+  async function start() {
+    if (testMode || !API_BASE || accessToken()) { render(); return; }
+    let required = false;
+    try {
+      const res = await fetch(API_BASE + "/api/access", { cache: "no-store" });
+      if (res.ok) required = !!(await res.json()).required;
+    } catch (e) { /* show the survey; a 401 on submit brings up the prompt */ }
+    if (required) showLogin(); else render();
+  }
+
+  start();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitBarLabels);
   window.addEventListener("hashchange", () => {
     if (!$("#survey")) return;

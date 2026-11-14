@@ -1,4 +1,4 @@
-name: Build and publish container
+name: Build container and deploy frontend
 
 on:
   push:
@@ -93,3 +93,49 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=container
           cache-to: type=gha,mode=max,scope=container
+
+  pages:
+    name: Deploy frontend to GitHub Pages
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deployment'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Point the frontend at the API
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        shell: bash
+        run: |
+          if [[ ! "$API_BASE_URL" =~ ^https://[^/?#[:space:]]+(/[^?#[:space:]]*)?$ ]]; then
+            echo "::error::Set the API_BASE_URL repository variable to the backend's https:// URL."
+            exit 1
+          fi
+          printf 'window.SURVEY_API_BASE = %s;\n' "$(jq -Rn --arg v "${API_BASE_URL%/}" '$v')" > frontend/config.js
+          cat frontend/config.js
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload frontend
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: frontend
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -105,8 +105,14 @@ public static class SurveyEndpoints
             !Uri.TryCreate($"{request.Scheme}://{request.Host}", UriKind.Absolute, out var server))
             return false;
 
-        return Uri.Compare(origin, server, UriComponents.SchemeAndServer,
-            UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) == 0;
+        if (Uri.Compare(origin, server, UriComponents.SchemeAndServer,
+                UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) == 0)
+            return true;
+
+        // The separately hosted frontend (e.g. GitHub Pages) configured in Cors:AllowedOrigins.
+        var configuration = request.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
+        return CorsSettings.Normalize(origins[0]) is { } normalized &&
+               CorsSettings.AllowedOrigins(configuration).Contains(normalized);
     }
 
     internal static IResult Error(int statusCode, string error) =>

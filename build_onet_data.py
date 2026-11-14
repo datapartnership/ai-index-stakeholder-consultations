@@ -5,7 +5,7 @@ Build the survey's O*NET data files from the official O*NET database download.
 Input: a folder (or .zip) containing these O*NET files, as CSV, Excel or tab-delimited text:
     Content Model Reference, IWA Reference, DWA Reference, Task Statements, Occupation Data
 
-Output (JSON written to src/StakeholderConsultations.Web/wwwroot/data/ by default):
+Output (JSON written to frontend/data/ by default):
     onet_activities.json   GWA -> IWA -> DWA hierarchy, used by the survey page
     soc_tasks.json         the 23 SOC major groups -> occupations -> task statements
     data/soc_tasks.csv     the same tasks as one flat table, outside the public web root
@@ -121,7 +121,7 @@ def main():
     ap.add_argument("--release", default="31.0")
     ap.add_argument("--date", default="August 2026")
     root = Path(__file__).resolve().parent
-    ap.add_argument("--out", type=Path, default=root / "src/StakeholderConsultations.Web/wwwroot/data")
+    ap.add_argument("--out", type=Path, default=root / "frontend/data")
     ap.add_argument("--csv-out", type=Path, default=root / "data/soc_tasks.csv")
     a = ap.parse_args()
 

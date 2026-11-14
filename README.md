@@ -1,16 +1,16 @@
 # Stakeholder Consultations
 
-An ASP.NET Core 10 application hosting the AI Index stakeholder survey and its backend on the same origin. The existing frontend is plain HTML, CSS, and JavaScript, with no frontend build step. Responses are stored in Azure SQL (or SQL Server) and can be downloaded through a protected CSV endpoint.
+The AI Index stakeholder survey: a static frontend (plain HTML, CSS, and JavaScript, no build step) published to GitHub Pages, and an API-only ASP.NET Core 10 backend published to GHCR as a container image. Responses are stored in Azure SQL (or SQL Server) and can be downloaded through a protected CSV endpoint.
 
 ## Project layout
 
-- `src/StakeholderConsultations.Web/`: the `net10.0` application, API, EF Core model, and migrations.
-- `src/StakeholderConsultations.Web/wwwroot/`: the public survey (`index.html`, `style.css`, `questions.js`, `survey.js`, `charts.js`, `story.js`) and O*NET JSON data.
+- `frontend/`: the public survey (`index.html`, `style.css`, `config.js`, `questions.js`, `survey.js`, `charts.js`, `story.js`) and O*NET JSON data. Deployed to GitHub Pages.
+- `src/StakeholderConsultations.Web/`: the `net10.0` API, EF Core model, and migrations. It serves no static files.
 - `tests/StakeholderConsultations.Web.Tests/`: API, validation, CSV, hosting, and optional real SQL integration tests.
-- `build_onet_data.py`: rebuilds browser data from an O*NET database download. JSON defaults to `wwwroot/data/`; CSV defaults to the non-public `data/soc_tasks.csv`. Override with `--out <json-directory>` and `--csv-out <csv-file>`.
+- `build_onet_data.py`: rebuilds browser data from an O*NET database download. JSON defaults to `frontend/data/`; CSV defaults to the non-public `data/soc_tasks.csv`. Override with `--out <json-directory>` and `--csv-out <csv-file>`.
 - `worker.js`: historical Cloudflare reference only; it is not used by this application.
 
-Only `wwwroot/` is served publicly. Repository documents, archives, raw data, reference code, and application configuration are outside it. Edit `wwwroot/questions.js` to change survey content; preserve existing question codes once responses exist.
+Only `frontend/` is published to Pages. Repository documents, archives, raw data, reference code, and application configuration are outside it. Edit `frontend/questions.js` to change survey content; preserve existing question codes once responses exist.
 
 ## Run locally
 
@@ -29,19 +29,37 @@ dotnet user-secrets set "Survey:AccessPassword" '<the password you share with st
 dotnet run --project src/StakeholderConsultations.Web
 ```
 
-Open <http://localhost:5080>. The frontend submits directly to `/api/responses`; no separate frontend server or CORS configuration is needed. User secrets are loaded in Development. Environment-variable equivalents are `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey` and `Survey__AccessPassword`. Do not commit credentials or pass them as URL parameters.
+Then serve the frontend from a second terminal and point it at the local API by setting `window.SURVEY_API_BASE = "http://localhost:5080";` in `frontend/config.js` (don't commit that change):
+
+```sh
+python3 -m http.server --directory frontend 8000
+```
+
+Open <http://localhost:8000>. `appsettings.Development.json` already allows `http://localhost:8000` and `http://127.0.0.1:8000` as CORS origins. With `SURVEY_API_BASE` left empty, the page runs in test mode and shows the payload instead of sending it. User secrets are loaded in Development. Environment-variable equivalents are `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey` and `Survey__AccessPassword`. Do not commit credentials or pass them as URL parameters.
 
 ## Survey password
 
-When `Survey:AccessPassword` (env var `Survey__AccessPassword`) is set, the survey is password-protected:
+When `Survey:AccessPassword` (env var `Survey__AccessPassword`) is set, submissions are password-protected. The page, scripts, and `data/*.json` files on GitHub Pages are public; only `POST /api/responses` is gated.
 
-- Visitors without access are redirected to `/login`, a small page that asks for the shared password. This covers the page, its scripts and styles, and the `data/*.json` files.
-- The correct password sets an `HttpOnly`, `SameSite=Lax` cookie (`Secure` over HTTPS) that lasts 30 days, then sends the visitor to the survey.
-- `/api/responses` returns `401` with `{ "ok": false, "error": "Password required" }` without the cookie.
+- On load, the frontend calls `GET /api/access` (`{ "required": true|false }`). If a password is required and the browser has no token yet, it shows a password prompt instead of the survey.
+- The prompt posts `{ "password": "…" }` as JSON to `POST /api/login`, which returns `{ "ok": true, "token": "…" }` or `401`. The frontend keeps the token in `localStorage` and sends it as `Authorization: Bearer <token>` with each submission. A bearer header is used instead of a cookie because a cookie from the API's domain would be a third-party cookie on `github.io`, which browsers block.
+- `/api/responses` returns `401` with `{ "ok": false, "error": "Password required" }` without a valid token; the frontend then asks for the password again and keeps the answers.
 - `/api/export` isn't affected; it still uses only `X-Export-Key`.
-- Login attempts are limited to 20 per minute per client IP; extra attempts get `429`.
-- The cookie is derived from the password, so it keeps working across restarts and instances. **Changing the password signs everyone out**; they need the new password to continue.
-- If the setting is empty or missing, the survey is public and startup logs a warning.
+- Login attempts are limited to 20 per minute per client IP; extra attempts get `429`. Logins from origins that are neither the API itself nor in `Cors:AllowedOrigins` get `403`.
+- The token is derived from the password, so it keeps working across restarts and instances. **Changing the password signs everyone out**; they need the new password to continue.
+- If the setting is empty or missing, submissions are public and startup logs a warning.
+
+## CORS
+
+The frontend and API live on different origins, so the API allows cross-origin requests only from origins listed in `Cors:AllowedOrigins`:
+
+```sh
+Cors__AllowedOrigins__0=https://datapartnership.github.io
+# or, as one comma-separated value:
+Cors__AllowedOrigins=https://datapartnership.github.io,https://survey.example.org
+```
+
+Entries are reduced to scheme, host, and port, so pasting the full Pages URL (`https://datapartnership.github.io/ai-index-stakeholder-consultations/`) also works. Allowed methods are `GET` and `POST`; allowed request headers are `Content-Type`, `Authorization`, and `X-Export-Key`. Credentials (cookies) are never allowed. With no origins configured, only same-origin and non-browser requests are accepted.
 
 When `ConnectionStrings:SurveyDatabase` is configured, the application applies pending EF Core migrations at startup before accepting requests. On the first run, this creates the `Responses` table, its index, and the EF migration history. Later starts apply only pending migrations and preserve existing responses. The database account must have permission to create and update the schema. If the configured database is unavailable or a migration fails, startup fails so the container can report the problem and be restarted after it is resolved.
 
@@ -53,8 +71,8 @@ Without a connection string, startup skips migrations and the homepage remains a
 
 - The body must be a flat JSON object with 1–120 fields, at most 20,000 UTF-8 bytes, including requests without a Content-Length header.
 - Field names must match `^[A-Za-z0-9_]{1,64}$`. Duplicate keys are rejected. Values may be strings (at most 5,000 UTF-16 code units), numbers, booleans, or null; objects and arrays are rejected.
-- Browser requests must have the application's own origin. Requests without an Origin header are accepted. Foreign or malformed origins return `403`; cross-origin access is not enabled.
-- Successful persistence returns `200` with `{ "ok": true }`. Failures return `{ "ok": false, "error": "..." }`: `400` for invalid JSON/fields, `413` for oversized bodies, `415` for unsupported media types, `401` when the survey password is enabled and the access cookie is missing, and `503` for storage failures.
+- Browser requests must come from the API's own origin or an origin in `Cors:AllowedOrigins`. Requests without an Origin header are accepted. Other or malformed origins return `403` without CORS headers.
+- Successful persistence returns `200` with `{ "ok": true }`. Failures return `{ "ok": false, "error": "..." }`: `400` for invalid JSON/fields, `413` for oversized bodies, `415` for unsupported media types, `401` when the survey password is enabled and the bearer token is missing or out of date, and `503` for storage failures.
 - Responses contain a server-generated GUID, server UTC receipt timestamp, and the answers in an `nvarchar(max)` JSON column. Submitted `responseId` and `receivedAt` fields are discarded; client `submittedAt` is retained as an answer. New question codes need no database migration.
 - No visitor IP addresses, user agents, request bodies, or export credentials are recorded by application logging. SQL sensitive-data logging is not enabled. Azure/platform access logging is configured separately.
 - The frontend retains answers on the page after a failed request so the respondent can retry. Each successful POST creates a new response; retries are not deduplicated.
@@ -113,19 +131,32 @@ Build from the repository root:
 ```sh
 docker build --pull -t stakeholder-consultations:local .
 docker run --rm --name stakeholder-consultations -p 8080:8080 \
-  -e ConnectionStrings__SurveyDatabase -e Survey__ExportKey -e Survey__AccessPassword \
+  -e ConnectionStrings__SurveyDatabase -e Survey__ExportKey -e Survey__AccessPassword -e Cors__AllowedOrigins \
   stakeholder-consultations:local
 ```
 
-Open <http://localhost:8080>. The image serves both the frontend and API, runs as the .NET image's non-root user, and listens on container port `8080`. The SDK is used only in the build stage; the final image contains the ASP.NET Core runtime and published application.
+<http://localhost:8080> returns `{ "ok": true, "service": "survey-api" }`. The image serves only the API, runs as the .NET image's non-root user, and listens on container port `8080`. The SDK is used only in the build stage; the final image contains the ASP.NET Core runtime and published application.
 
-Set `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey` and `Survey__AccessPassword` in your shell or deployment platform before running the container. The `-e NAME` options forward those environment variables without embedding their values in the image. The database must be reachable from inside the container; `localhost` refers to the container itself. The container automatically creates or updates the schema at startup using the configured database account, which must have schema migration permissions. Without SQL configuration, the frontend still loads and submissions return `503`.
+Set `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey`, `Survey__AccessPassword` and `Cors__AllowedOrigins` in your shell or deployment platform before running the container. The `-e NAME` options forward those environment variables without embedding their values in the image. The database must be reachable from inside the container; `localhost` refers to the container itself. The container automatically creates or updates the schema at startup using the configured database account, which must have schema migration permissions. Without SQL configuration, the API still starts and submissions return `503`.
 
-The Docker build context includes only the web project, excluding local build output, local settings, credential files, documents, and raw O*NET downloads. Both browser JSON datasets are included in the image.
+The Docker build context includes only the web project, excluding the frontend, local build output, local settings, credential files, documents, and raw O*NET downloads.
+
+## GitHub Pages
+
+The `pages` job in `.github/workflows/deploy.yml` publishes `frontend/` to GitHub Pages after the tests pass, on pushes to `deployment` (and manual runs on that branch). Before uploading, it overwrites `frontend/config.js` with the `API_BASE_URL` repository variable, so the published page talks to the deployed API. Pull requests and other branches don't deploy.
+
+One-time setup:
+
+1. **Settings → Pages → Build and deployment → Source:** GitHub Actions.
+2. **Settings → Environments → `github-pages`:** allow the `deployment` branch under deployment branch rules.
+3. **Settings → Secrets and variables → Actions → Variables:** add `API_BASE_URL` with the backend's public `https://` URL (no trailing `/api`). The job fails if it is missing or not `https://`.
+4. On the backend, set `Cors__AllowedOrigins__0=https://datapartnership.github.io`.
+
+The site is served at <https://datapartnership.github.io/ai-index-stakeholder-consultations/>.
 
 ## GitHub Container Registry
 
-The workflow in `.github/workflows/container.yml` tests the application before building Linux AMD64 and ARM64 images. It publishes to:
+The workflow in `.github/workflows/deploy.yml` tests the application before building Linux AMD64 and ARM64 images. It publishes to:
 
 ```text
 ghcr.io/datapartnership/ai-index-stakeholder-consultations
@@ -144,7 +175,7 @@ Once the workflow has published an image:
 ```sh
 docker pull ghcr.io/datapartnership/ai-index-stakeholder-consultations:latest
 docker run --rm -p 8080:8080 \
-  -e ConnectionStrings__SurveyDatabase -e Survey__ExportKey -e Survey__AccessPassword \
+  -e ConnectionStrings__SurveyDatabase -e Survey__ExportKey -e Survey__AccessPassword -e Cors__AllowedOrigins \
   ghcr.io/datapartnership/ai-index-stakeholder-consultations:latest
 ```
 
@@ -153,11 +184,11 @@ Authenticate with `docker login ghcr.io` first when pulling a private package. I
 ## Azure App Service
 
 1. Use a .NET 10 Azure App Service on Windows or Linux and an existing Azure SQL database reachable from that app.
-2. Configure `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey` and `Survey__AccessPassword` as App Service environment settings. Set `ASPNETCORE_ENVIRONMENT=Production`, enable HTTPS Only, and set `AllowedHosts` to the app hostname (semicolon-separated if using multiple domains).
+2. Configure `ConnectionStrings__SurveyDatabase`, `Survey__ExportKey`, `Survey__AccessPassword` and `Cors__AllowedOrigins__0` (the Pages origin) as App Service environment settings. Set `ASPNETCORE_ENVIRONMENT=Production`, enable HTTPS Only, and set `AllowedHosts` to the app hostname (semicolon-separated if using multiple domains).
 3. For Linux App Service HTTPS proxy termination, set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` in the managed App Service environment so the application sees the external HTTPS scheme for same-origin checks. Windows/IIS uses ASP.NET Core's IIS integration. If hosting behind a different proxy, explicitly configure trusted forwarding for that environment.
-4. Deploy the **contents** of `artifacts/publish/` as one app, including the DLLs, configuration, and `wwwroot/`. The app applies pending database migrations on startup, so its configured database account needs schema migration permissions. Linux startup is `dotnet StakeholderConsultations.Web.dll`; it must not use the previous Node/PM2 static-server command.
+4. Deploy the **contents** of `artifacts/publish/` as one app, including the DLLs and configuration (or run the GHCR image). The app applies pending database migrations on startup, so its configured database account needs schema migration permissions. Linux startup is `dotnet StakeholderConsultations.Web.dll`; it must not use the previous Node/PM2 static-server command.
 5. For Windows/IIS, use the `web.config` generated by `dotnet publish`. The old static-only repository `web.config` has been removed.
-6. Check `/`, `/style.css`, `/survey.js`, `/data/onet_activities.json`, and `/data/soc_tasks.json`. Submit a test response, confirm it appears in the protected export, and verify `/appsettings.json`, `/worker.js`, and unknown routes return `404`.
+6. Check that `/` returns `{ "ok": true }` and `/api/access` responds. From the Pages site, submit a test response, confirm it appears in the protected export, and verify `/appsettings.json`, `/index.html`, and unknown routes return `404`.
 
 This repository change does not provision cloud resources, deploy the app, or import existing Cloudflare responses.
 
@@ -177,7 +208,7 @@ Every indicator and every question in `questions.js` has a `code`. Each answer i
 
 | Code | Indicator |
 | --- | --- |
-| `RSP` | About the respondent (top of the survey, `aboutQuestions` in `wwwroot/questions.js`) |
+| `RSP` | About the respondent (top of the survey, `aboutQuestions` in `frontend/questions.js`) |
 | `USE` | Use Case |
 | `ACT` | Work Activities |
 | `OCC` | Occupational Topic |

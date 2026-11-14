@@ -9,6 +9,7 @@ builder.Services.AddDbContext<SurveyDbContext>(options =>
         sql => sql.EnableRetryOnFailure()));
 builder.Services.AddScoped<ISurveyResponseStore, SqlSurveyResponseStore>();
 builder.Services.AddAccessGate();
+builder.Services.AddSurveyCors();
 
 var app = builder.Build();
 
@@ -30,9 +31,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+// The frontend is hosted separately (GitHub Pages); this app only serves the API.
+app.UseCors();
 app.UseAccessGate();
-app.UseDefaultFiles();
-app.UseStaticFiles();
+app.MapGet("/", () => Results.Json(new { ok = true, service = "survey-api" }));
 app.MapAccessGate();
 app.MapSurveyEndpoints();
 

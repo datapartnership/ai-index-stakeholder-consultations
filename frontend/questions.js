@@ -4,8 +4,8 @@
   Edit this file to change the survey text and questions. You never need to touch
   index.html, style.css, charts.js or survey.js.
 
-  endpointUrl  – where responses are sent (the ASP.NET backend uses /api/responses).
-                 While it is left as the placeholder, the page runs in TEST MODE:
+  endpointUrl  – where responses are sent: <API base from config.js>/api/responses.
+                 While config.js leaves the API base empty, the page runs in TEST MODE:
                  nothing is sent, and the data that *would* be sent is shown on screen.
 
   The page opens with a short scrolling introduction (in index.html),   then two tabs:
@@ -43,7 +43,7 @@ window.SURVEY_CONFIG = {
   siteTitle: "AI Index stakeholder consultation",
   surveyVersion: "2026-11-6",   // sent with every response; bump when questions change
 
-  endpointUrl: "/api/responses",
+  endpointUrl: window.SURVEY_API_BASE ? window.SURVEY_API_BASE.replace(/\/+$/, "") + "/api/responses" : "",
 
   submitLabel: "Submit feedback",
   thankYouTitle: "Thank you for your feedback",

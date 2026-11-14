@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 
 namespace StakeholderConsultations.Web.Tests;
@@ -9,67 +11,73 @@ public sealed class AccessGateTests
     private const string Password = "open-sesame";
 
     private static Task<HttpResponseMessage> LoginAsync(HttpClient client, string password) =>
-        client.PostAsync("/login", new FormUrlEncodedContent(new Dictionary<string, string> { ["password"] = password }));
+        client.PostAsJsonAsync("/api/login", new { password });
+
+    private static HttpRequestMessage Submit(string? token)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/responses") { Content = new StringContent("{\"Q\":1}") };
+        if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return request;
+    }
 
     [Fact]
-    public async Task SurveyIsPublicWhenNoPasswordIsConfigured()
+    public async Task SubmissionsArePublicWhenNoPasswordIsConfigured()
     {
         await using var factory = new SurveyApplicationFactory();
         using var client = factory.CreateSurveyClient();
-        using var page = await client.GetAsync("/");
-        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        using var access = await client.GetAsync("/api/access");
+        Assert.False((await access.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("required").GetBoolean());
         using var submit = await client.PostAsync("/api/responses", new StringContent("{\"Q\":1}"));
         Assert.Equal(HttpStatusCode.OK, submit.StatusCode);
     }
 
-    [Theory]
-    [InlineData("/")]
-    [InlineData("/index.html")]
-    [InlineData("/survey.js")]
-    [InlineData("/data/onet_activities.json")]
-    public async Task PagesAndAssetsRedirectToLoginWithoutCookie(string path)
+    [Fact]
+    public async Task AccessEndpointReportsThatPasswordIsRequired()
     {
         await using var factory = new SurveyApplicationFactory(accessPassword: Password);
         using var client = factory.CreateSurveyClient();
-        using var response = await client.GetAsync(path);
-        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal("/login", response.Headers.Location?.OriginalString);
+        using var response = await client.GetAsync("/api/access");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("required").GetBoolean());
     }
 
-    [Fact]
-    public async Task SubmissionsAreRejectedWithoutCookie()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-the-token")]
+    public async Task SubmissionsAreRejectedWithoutValidToken(string? token)
     {
         await using var factory = new SurveyApplicationFactory(accessPassword: Password);
         using var client = factory.CreateSurveyClient();
-        using var response = await client.PostAsync("/api/responses", new StringContent("{\"Q\":1}"));
+        using var response = await client.SendAsync(Submit(token));
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.False((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("ok").GetBoolean());
         Assert.Empty(factory.Store.Responses);
     }
 
     [Fact]
-    public async Task LoginPageIsServedWithoutCaching()
-    {
-        await using var factory = new SurveyApplicationFactory(accessPassword: Password);
-        using var client = factory.CreateSurveyClient();
-        using var response = await client.GetAsync("/login");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
-        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
-        Assert.Contains("type=\"password\"", await response.Content.ReadAsStringAsync());
-    }
-
-    [Fact]
-    public async Task WrongPasswordIsRejectedWithoutCookie()
+    public async Task WrongPasswordIsRejectedWithoutToken()
     {
         await using var factory = new SurveyApplicationFactory(accessPassword: Password);
         using var client = factory.CreateSurveyClient();
         using var response = await LoginAsync(client, "wrong");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.False(response.Headers.Contains("Set-Cookie"));
-        Assert.Contains("not correct", await response.Content.ReadAsStringAsync());
-        using var page = await client.GetAsync("/");
-        Assert.Equal(HttpStatusCode.Redirect, page.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.TryGetProperty("token", out _));
+        Assert.Contains("not correct", body.GetProperty("error").GetString());
+    }
+
+    [Theory]
+    [InlineData("{}", "application/json", HttpStatusCode.BadRequest)]
+    [InlineData("not json", "application/json", HttpStatusCode.BadRequest)]
+    [InlineData("{\"password\":1}", "application/json", HttpStatusCode.BadRequest)]
+    [InlineData("password=open-sesame", "application/x-www-form-urlencoded", HttpStatusCode.UnsupportedMediaType)]
+    public async Task MalformedLoginRequestsAreRejected(string body, string mediaType, HttpStatusCode expected)
+    {
+        await using var factory = new SurveyApplicationFactory(accessPassword: Password);
+        using var client = factory.CreateSurveyClient();
+        using var response = await client.PostAsync("/api/login", new StringContent(body, Encoding.UTF8, mediaType));
+        Assert.Equal(expected, response.StatusCode);
     }
 
     [Fact]
@@ -80,41 +88,35 @@ public sealed class AccessGateTests
         client.DefaultRequestHeaders.Add("Origin", "https://other.test");
         using var response = await LoginAsync(client, Password);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.False(response.Headers.Contains("Set-Cookie"));
     }
 
     [Fact]
-    public async Task CorrectPasswordUnlocksSurveyAndSubmissions()
+    public async Task CorrectPasswordFromAllowedOriginUnlocksSubmissions()
     {
-        await using var factory = new SurveyApplicationFactory(accessPassword: Password);
+        const string origin = "https://pages.example";
+        await using var factory = new SurveyApplicationFactory(accessPassword: Password, allowedOrigins: origin);
         using var client = factory.CreateSurveyClient();
+        client.DefaultRequestHeaders.Add("Origin", origin);
         using var login = await LoginAsync(client, Password);
-        Assert.Equal(HttpStatusCode.SeeOther, login.StatusCode);
-        Assert.Equal("/", login.Headers.Location?.OriginalString);
-        var cookie = Assert.Single(login.Headers.GetValues("Set-Cookie"));
-        Assert.StartsWith("survey_access=", cookie);
-        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("samesite=lax", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        Assert.Equal(origin, Assert.Single(login.Headers.GetValues("Access-Control-Allow-Origin")));
+        Assert.False(login.Headers.Contains("Set-Cookie"));
+        var token = (await login.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString();
+        Assert.Equal(AccessGate.CreateToken(Password), token);
 
-        using var page = await client.GetAsync("/");
-        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
-        using var data = await client.GetAsync("/data/onet_activities.json");
-        Assert.Equal(HttpStatusCode.OK, data.StatusCode);
-        using var submit = await client.PostAsync("/api/responses", new StringContent("{\"Q\":1}"));
+        using var submit = await client.SendAsync(Submit(token));
         Assert.Equal(HttpStatusCode.OK, submit.StatusCode);
         Assert.Single(factory.Store.Responses);
     }
 
     [Theory]
     [InlineData("new-password", HttpStatusCode.OK)]
-    [InlineData(Password, HttpStatusCode.Redirect)]
-    public async Task CookiesOnlyWorkForTheCurrentPassword(string cookiePassword, HttpStatusCode expected)
+    [InlineData(Password, HttpStatusCode.Unauthorized)]
+    public async Task TokensOnlyWorkForTheCurrentPassword(string tokenPassword, HttpStatusCode expected)
     {
         await using var factory = new SurveyApplicationFactory(accessPassword: "new-password");
         using var client = factory.CreateSurveyClient();
-        client.DefaultRequestHeaders.Add("Cookie", $"survey_access={AccessGate.CreateToken(cookiePassword)}");
-        using var response = await client.GetAsync("/");
+        using var response = await client.SendAsync(Submit(AccessGate.CreateToken(tokenPassword)));
         Assert.Equal(expected, response.StatusCode);
     }
 

@@ -71,7 +71,10 @@ public static class AccessGate
         app.MapGet(AccessPath, (HttpContext context, IConfiguration configuration) =>
         {
             context.Response.Headers.CacheControl = "no-store";
-            return Results.Json(new { required = !string.IsNullOrEmpty(configuration[PasswordKey]) });
+            var password = configuration[PasswordKey];
+            var required = !string.IsNullOrEmpty(password);
+            // `authorized` lets the frontend check a stored token before revealing the page.
+            return Results.Json(new { required, authorized = !required || HasValidToken(context.Request, password!) });
         });
         app.MapPost(LoginPath, LoginAsync).RequireRateLimiting(LoginRateLimitPolicy);
     }

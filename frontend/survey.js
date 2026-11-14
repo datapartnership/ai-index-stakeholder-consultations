@@ -990,43 +990,71 @@
     window.scrollTo(0, 0);
   }
 
+  // ---------- login gate ----------
+  // Until access is confirmed, <html class="locked"> hides the whole page and only #gate shows.
+  const gate = document.getElementById("gateCard");
+  function lock() {
+    document.documentElement.classList.add("locked");
+    window.scrollTo(0, 0);
+  }
+  function unlock() {
+    if (gate) gate.innerHTML = "";
+    if (!document.documentElement.classList.contains("locked")) return;
+    document.documentElement.classList.remove("locked");
+    window.scrollTo(0, 0);
+    // The intro measured itself while hidden; let it re-measure now that it is visible.
+    window.dispatchEvent(new Event("resize"));
+  }
+  function enter() { unlock(); render(); }
+
   function showLogin(message) {
-    app.innerHTML = "";
+    lock();
+    gate.innerHTML = "";
     const input = el("input", { type: "password", id: "accessPassword", name: "password", autocomplete: "current-password", required: true });
     const error = el("p", { class: "form-error", role: "alert", text: message || "" });
-    const button = el("button", { type: "submit", class: "btn btn-primary", text: "Continue" });
-    const form = el("form", { class: "done access-form" }, [
-      el("h2", { text: cfg.siteTitle || "Survey" }),
+    const button = el("button", { type: "submit", class: "btn btn-primary", text: "Log in" });
+    const form = el("form", { class: "access-form", "aria-labelledby": "gateTitle" }, [
+      el("h1", { id: "gateTitle", text: cfg.siteTitle || "Survey" }),
       el("p", { text: "Please enter the password you received with your invitation." }),
       el("label", { for: "accessPassword", text: "Password" }), input, error, button]);
     form.addEventListener("submit", async e => {
       e.preventDefault();
       error.textContent = "";
-      button.disabled = true;
+      if (!input.value) { error.textContent = "Please enter the password."; input.focus(); return; }
+      button.disabled = true; button.textContent = "Checking…";
       try {
         const res = await fetch(API_BASE + "/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: input.value }) });
         const body = await res.json().catch(() => ({}));
-        if (res.ok && body.ok) { accessToken(body.token); render(); return; }
+        if (res.ok && body.ok) { accessToken(body.token); enter(); return; }
         error.textContent = body.error || (res.status === 429 ? "Too many attempts. Please wait a minute and try again." : "Could not check the password. Please try again.");
       } catch (err) {
         error.textContent = "Could not reach the survey server. Check your internet connection and try again.";
       }
-      button.disabled = false;
+      button.disabled = false; button.textContent = "Log in";
+      input.select();
       input.focus();
     });
-    app.appendChild(form);
-    input.focus({ preventScroll: true });
+    gate.appendChild(form);
+    input.focus();
   }
 
-  // Ask for the shared password up front when the API requires one.
+  // Nothing is shown until the API confirms that no password is needed or the stored token is valid.
   async function start() {
-    if (testMode || !API_BASE || accessToken()) { render(); return; }
-    let required = false;
+    if (testMode || !API_BASE) { enter(); return; }
+    gate.innerHTML = "";
+    gate.appendChild(el("p", { class: "gate-status", role: "status", text: "Loading…" }));
+    const token = accessToken();
     try {
-      const res = await fetch(API_BASE + "/api/access", { cache: "no-store" });
-      if (res.ok) required = !!(await res.json()).required;
-    } catch (e) { /* show the survey; a 401 on submit brings up the prompt */ }
-    if (required) showLogin(); else render();
+      const res = await fetch(API_BASE + "/api/access", { cache: "no-store", headers: token ? { Authorization: "Bearer " + token } : {} });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const body = await res.json();
+      if (!body.required || body.authorized) { enter(); return; }
+      if (token) accessToken(null);
+      showLogin();
+    } catch (e) {
+      console.error("Could not check survey access:", e);
+      showLogin("Could not reach the survey server. Check your internet connection, then enter the password to try again.");
+    }
   }
 
   start();

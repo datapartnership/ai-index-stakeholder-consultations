@@ -333,10 +333,21 @@ textarea:focus, input[type=text]:focus, input[type=email]:focus, input[type=numb
 .done { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 760px; }
 .done h2 { font: 500 28px/34px var(--font-display); color: var(--navy); }
 .done p { font-size: 16px; line-height: 24px; color: var(--text-secondary); }
-.access-form { max-width: 420px; }
-.access-form label { font-weight: 600; font-size: 14px; }
+/* ---------- login gate ---------- */
+html.locked #page { display: none; }
+html:not(.locked) #gate { display: none; }
+.gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px var(--gutter); background: var(--navy); }
+.gate-card { width: 100%; max-width: 420px; background: #fff; color: var(--text-primary); border-radius: 8px; padding: 32px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+.gate-card noscript p, .gate-status { font-size: 16px; line-height: 24px; color: var(--text-secondary); }
+.access-form { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.access-form h1 { font: 500 28px/34px var(--font-display); color: var(--navy); margin: 0; }
+.access-form p { font-size: 16px; line-height: 24px; color: var(--text-secondary); }
+.access-form label { font-weight: 600; font-size: 14px; margin-top: 8px; }
 .access-form input { width: 100%; }
 .access-form .form-error { text-align: left; }
+.access-form .form-error:empty { display: none; }
+.access-form .btn { align-self: flex-start; }
+@media (max-width: 599px) { .gate-card { padding: 24px; } }
 .done pre { width: 100%; background: var(--bg-subtle); border-radius: var(--radius-md); padding: 16px; overflow: auto; max-height: 60vh; font-size: 13px; line-height: 18px; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
 

@@ -41,7 +41,7 @@ Open <http://localhost:8000>. `appsettings.Development.json` already allows `htt
 
 When `Survey:AccessPassword` (env var `Survey__AccessPassword`) is set, submissions are password-protected. The page, scripts, and `data/*.json` files on GitHub Pages are public; only `POST /api/responses` is gated.
 
-- On load, the frontend calls `GET /api/access` (`{ "required": true|false }`). If a password is required and the browser has no token yet, it shows a password prompt instead of the survey.
+- On load, the whole page (intro, survey and footer) is hidden behind a login screen. The frontend calls `GET /api/access`, sending its stored token if it has one, and gets `{ "required": true|false, "authorized": true|false }`. The page is revealed only when no password is required or the token is valid; otherwise the stored token is discarded and the login screen asks for the password. If the API can't be reached, the page stays locked. This hides the content in the browser only: the static files on GitHub Pages are still publicly downloadable.
 - The prompt posts `{ "password": "…" }` as JSON to `POST /api/login`, which returns `{ "ok": true, "token": "…" }` or `401`. The frontend keeps the token in `localStorage` and sends it as `Authorization: Bearer <token>` with each submission. A bearer header is used instead of a cookie because a cookie from the API's domain would be a third-party cookie on `github.io`, which browsers block.
 - `/api/responses` returns `401` with `{ "ok": false, "error": "Password required" }` without a valid token; the frontend then asks for the password again and keeps the answers.
 - `/api/export` isn't affected; it still uses only `X-Export-Key`.

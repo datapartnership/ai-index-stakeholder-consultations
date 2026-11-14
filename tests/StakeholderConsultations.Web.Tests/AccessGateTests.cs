@@ -43,6 +43,22 @@ public sealed class AccessGateTests
     }
 
     [Theory]
+    [InlineData(null, false)]
+    [InlineData("not-the-token", false)]
+    [InlineData(Password, true)]
+    public async Task AccessEndpointReportsWhetherStoredTokenIsValid(string? tokenFor, bool expected)
+    {
+        await using var factory = new SurveyApplicationFactory(accessPassword: Password);
+        using var client = factory.CreateSurveyClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/access");
+        if (tokenFor is not null)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer",
+                tokenFor == Password ? AccessGate.CreateToken(Password) : tokenFor);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(expected, (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("authorized").GetBoolean());
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("not-the-token")]
     public async Task SubmissionsAreRejectedWithoutValidToken(string? token)

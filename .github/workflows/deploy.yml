@@ -2,10 +2,10 @@ name: Build container and deploy frontend
 
 on:
   push:
-    branches: [deployment]
+    branches: [main, deployment]
     tags: ["v*"]
   pull_request:
-    branches: [deployment]
+    branches: [main, deployment]
   workflow_dispatch:
 
 permissions:
@@ -97,7 +97,7 @@ jobs:
   pages:
     name: Deploy frontend to GitHub Pages
     needs: test
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deployment'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

@@ -143,12 +143,12 @@ The Docker build context includes only the web project, excluding the frontend, 
 
 ## GitHub Pages
 
-The `pages` job in `.github/workflows/deploy.yml` publishes `frontend/` to GitHub Pages after the tests pass, on pushes to `deployment` (and manual runs on that branch). Before uploading, it overwrites `frontend/config.js` with the `API_BASE_URL` repository variable, so the published page talks to the deployed API. Pull requests and other branches don't deploy.
+The `pages` job in `.github/workflows/deploy.yml` publishes `frontend/` to GitHub Pages after the tests pass, on pushes to `main` (and manual runs on that branch). Before uploading, it overwrites `frontend/config.js` with the `API_BASE_URL` repository variable, so the published page talks to the deployed API. Pull requests and other branches don't deploy.
 
 One-time setup:
 
 1. **Settings → Pages → Build and deployment → Source:** GitHub Actions.
-2. **Settings → Environments → `github-pages`:** allow the `deployment` branch under deployment branch rules.
+2. **Settings → Environments → `github-pages`:** allow the `main` branch under deployment branch rules.
 3. **Settings → Secrets and variables → Actions → Variables:** add `API_BASE_URL` with the backend's public `https://` URL (no trailing `/api`). The job fails if it is missing or not `https://`.
 4. On the backend, set `Cors__AllowedOrigins__0=https://datapartnership.github.io`.
 
